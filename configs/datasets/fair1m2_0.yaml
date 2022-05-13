@@ -1,0 +1,17 @@
+data_dir: datasets/Fair1m2_0
+train_ann: 'train'
+val_ann: 'val'
+test_ann: 'test'
+num_classes: 37
+class_names: [
+    'Boeing737', 'Boeing777', 'Boeing747', 'Boeing787', 
+    'A321', 'A220', 'A330', 'A350', 'C919', 'ARJ21', 
+    'other-airplane', 'Passenger_Ship', 'Motorboat', 
+    'Fishing_Boat', 'Tugboat', 'Engineering_Ship', 
+    'Liquid_Cargo_Ship', 'Dry_Cargo_Ship', 'Warship', 
+    'other-ship', 'Small_Car', 'Bus', 'Cargo_Truck', 
+    'Dump_Truck', 'Van', 'Trailer', 'Tractor', 
+    'Truck_Tractor', 'Excavator', 'other-vehicle', 
+    'Baseball_Field', 'Basketball_Court', 'Football_Field', 
+    'Tennis_Court', 'Roundabout', 'Intersection', 'Bridge'
+]

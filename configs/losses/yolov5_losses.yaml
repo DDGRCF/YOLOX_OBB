@@ -1,0 +1,12 @@
+Functions:
+  obj_loss: 
+    func: CrossEntropyLoss
+    args: [0.5, mean, bce_use_sigmoid]
+  cls_loss: 
+    func: CrossEntropyLoss
+    args: [0.3, mean, bce_use_sigmoid]
+  reg_loss:
+    func: IoULoss
+    args: [0.5, mean, iou, True]
+Args:
+  anchor_thre: 4

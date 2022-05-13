@@ -1,0 +1,9 @@
+data_dir: datasets/DOTA1_0
+train_ann: 'trainval'
+val_ann: 'val'
+test_ann: 'test'
+num_classes: 15
+class_names: ['large-vehicle', 'swimming-pool', 'helicopter', 'bridge',
+    'plane', 'ship', 'soccer-ball-field', 'basketball-court',
+    'ground-track-field', 'small-vehicle', 'baseball-diamond',
+    'tennis-court', 'roundabout', 'storage-tank', 'harbor']  # class names

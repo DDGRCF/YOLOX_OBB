@@ -1,0 +1,57 @@
+# Parameters
+depth_multiple: 0.33  # model depth multiple
+width_multiple: 0.50  # layer channel multiple
+anchors: &anchors 1  # number of anchors
+
+# YOLOv5 backbone
+backbone:
+  # [from, number, module, args]
+  [[-1, 1, Conv, [64, 6, 2, 2, kwargs(act_func=nn.ReLU)]],  # 0-P1/2
+   [-1, 1, Conv, [128, 3, 2, kwargs(act_func=nn.ReLU)]],  # 1-P2/4
+   [-1, 3, C3, [128, kwargs(act_func=nn.ReLU)]],
+   [-1, 1, Conv, [256, 3, 2, kwargs(act_func=nn.ReLU)]],  # 3-P3/8
+   [-1, 9, C3, [256, kwargs(act_func=nn.ReLU)]],
+   [-1, 1, Conv, [512, 3, 2, kwargs(act_func=nn.ReLU)]],  # 5-P4/16
+   [-1, 9, C3, [512, kwargs(act_func=nn.ReLU)]],
+   [-1, 1, Conv, [1024, 3, 2, kwargs(act_func=nn.ReLU)]],  # 7-P5/32
+   [-1, 1, SPP, [1024, [5, 9, 13], kwargs(act_func=nn.ReLU)]],
+   [-1, 3, C3, [1024, False, kwargs(act_func=nn.ReLU)]],  # 9
+  ]
+
+# YOLOX head
+head:
+  [[-1, 1, Conv, [512, 1, 1, kwargs(act_func=nn.ReLU)]],
+   [-1, 1, nn.Upsample, [None, 2, 'nearest']],
+   [[-1, 6], 1, Concat, [1]],  # cat backbone P4
+   [-1, 3, C3, [512, False, kwargs(act_func=nn.ReLU)]],  # 13
+
+   [-1, 1, Conv, [256, 1, 1, kwargs(act_func=nn.ReLU)]],
+   [-1, 1, nn.Upsample, [None, 2, 'nearest']],
+   [[-1, 4], 1, Concat, [1]],  # cat backbone P3
+   [-1, 3, C3, [256, False, kwargs(act_func=nn.ReLU)]],  # 17 (P3/8-small)
+
+   [-1, 1, Conv, [256, 3, 2, kwargs(act_func=nn.ReLU)]],
+   [[-1, 14], 1, Concat, [1]],  # cat head P4
+   [-1, 3, C3, [512, False, kwargs(act_func=nn.ReLU)]],  # 20 (P4/16-medium)
+
+   [-1, 1, Conv, [512, 3, 2, kwargs(act_func=nn.ReLU)]],
+   [[-1, 10], 1, Concat, [1]],  # cat head P5
+   [-1, 3, C3, [1024, False, kwargs(act_func=nn.ReLU)]],  # 23 (P5/32-large)
+
+# yolox head
+   [17, 1, Conv, [256, 1, 1, kwargs(act_func=nn.ReLU)]],  # 24 lateral0 (P3/8-small)
+   [20, 1, Conv, [256, 1, 1, kwargs(act_func=nn.ReLU)]],  # 25 lateral1 (P4/16-medium)
+   [23, 1, Conv, [256, 1, 1, kwargs(act_func=nn.ReLU)]],  # 26 lateral2 (P5/32-large)
+                           
+   [24, 2, Conv, [256, 3, 1, kwargs(act_func=nn.ReLU)]],  # 27 cls0 (P3/8-small)
+   [24, 2, Conv, [256, 3, 1, kwargs(act_func=nn.ReLU)]],  # 28 reg0 (P3/8-small)
+                           
+   [25, 2, Conv, [256, 3, 1, kwargs(act_func=nn.ReLU)]],  # 29 cls1 (P4/16-medium)
+   [25, 2, Conv, [256, 3, 1, kwargs(act_func=nn.ReLU)]],  # 30 reg1 (P4/16-medium)
+                           
+   [26, 2, Conv, [256, 3, 1, kwargs(act_func=nn.ReLU)]],  # 31 cls2 (P5/32-large)
+   [26, 2, Conv, [256, 3, 1, kwargs(act_func=nn.ReLU)]],  # 32 reg2 (P5/32-large)
+  ]
+
+detect:
+    [[[27, 28, 29, 30, 31, 32], 1, DetectX, [*anchors]]]  # Detect(P3, P4, P5)

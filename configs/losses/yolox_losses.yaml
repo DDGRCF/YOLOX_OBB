@@ -1,0 +1,15 @@
+Functions:
+  obj_loss: 
+    func: CrossEntropyLoss
+    args: [1, sum, bce_use_sigmoid]
+  cls_loss: 
+    func: CrossEntropyLoss
+    args: [1, sum, bce_use_sigmoid]
+  reg_loss:
+    func: IoULoss
+    args: [5, sum, iou]
+  reg_loss_extra:
+    func: L1Loss
+    args: [1, sum, norm]
+Args:
+  prior_prob: 0.01

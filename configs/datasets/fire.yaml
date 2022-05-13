@@ -1,0 +1,6 @@
+data_dir: datasets/Fire
+train_ann: 'train'
+val_ann: 'val'
+# ddtest_ann: 'test'
+num_classes: 1
+class_names: ["0"]

@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+# -*- coding:utf-8 -*-
+# Copyright (c) Megvii, Inc. and its affiliates.
+
+# VOC_CLASSES = ( '__background__', # always index 0
+data_dir: datasets/voc
+train_name: [('2007', 'trainval'), ('2012', 'trainval')]
+test_name: [('2007', 'test')]
+num_classes: 20
+class_names:  ["aeroplane", "bicycle","bird","boat",
+               "bottle","bus","car","cat","chair",
+               "cow","diningtable","dog","horse","motorbike",
+               "person","pottedplant","sheep","sofa","train","tvmonitor"]

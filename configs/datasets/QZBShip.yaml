@@ -1,0 +1,6 @@
+data_dir: datasets/QZBShip
+train_ann: 'train_split'
+val_ann: 'val_split'
+test_ann: 'test_split'
+num_classes: 13
+class_names: ['10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '22', '23']  # class names

@@ -7,9 +7,8 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 
-from .yolox_base import Exp, load_info_wrapper
+from .yolox_base import Exp
 
-# @load_info_wrapper
 class OBBExp(Exp):
     def __init__(self):
         super().__init__()

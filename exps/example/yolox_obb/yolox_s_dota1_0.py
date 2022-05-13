@@ -8,7 +8,6 @@ from yolox.exp import OBBExp as MyExp
 from yolox.exp import load_info_wrapper
 
 
-@load_info_wrapper
 class Exp(MyExp):
     def __init__(self):
         super().__init__()
@@ -22,6 +21,8 @@ class Exp(MyExp):
         self.enable_copy_paste = True # for copy paste augmention
         self.enable_resample = True # for resampling samples
         self.copy_paste_prob = 1.0
+        self.mosaic_prob = 1.0
+        self.mixup_prob = 1.0
         # enable debug which allow usr to debug aug images
         self.enable_debug = False
         # ignore images which exists horizontal labels, 
@@ -30,3 +31,4 @@ class Exp(MyExp):
         # ignore images which has no labels, which ensure each train contains labels
         self.empty_ignore = True
         self.test_conf = 0.05
+        self._get_data_info(self.dataset_config)

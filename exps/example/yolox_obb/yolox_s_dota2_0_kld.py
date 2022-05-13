@@ -6,10 +6,7 @@ import os
 import torch.nn as nn
 
 from yolox.exp import OBBExp as MyExp
-from yolox.exp import load_info_wrapper
 
-
-@load_info_wrapper
 class Exp(MyExp):
     def __init__(self):
         super().__init__()

@@ -14,20 +14,6 @@ from loguru import logger
 
 from yolox.utils import LRScheduler
 
-def load_info_wrapper(cls):
-    class wrapper():
-        def __init__(self, *args, **kwargs):
-            self.wrapper = cls(*args, **kwargs)
-            if hasattr(self.wrapper, "dataset_config"):
-                self.wrapper._get_data_info(self.wrapper.dataset_config)
-            else:
-                logger.warning("Can't find dataset config!!!")
-
-        def __getattr__(self, name):
-            return getattr(self.wrapper, name)
-
-    return wrapper
-
 
 class BaseExp(metaclass=ABCMeta):
     """Basic class for any experiment."""

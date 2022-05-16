@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from .parse_model import get_model
 from yolox.utils import check_anchor_order
-from .modules import detect_type
+from .modules import Detect
 
 class Model(nn.Module):
     def __init__(self, modules_cfg="", losses_cfg="", in_channel=3, num_classes=80):
@@ -13,10 +13,14 @@ class Model(nn.Module):
         detect_module = self.model[-1]
         detect_module.initialize_losses(losses_cfg)
         self.num_classes = getattr(detect_module, "num_classes", 80)
-        if isinstance(detect_module, detect_type):
+        if isinstance(detect_module, Detect):
             max_stride = 256
-            with torch.no_grad():
-                detect_module.strides = torch.tensor([max_stride / x.shape[-2] for x in self.forward(torch.zeros(1, in_channel, max_stride, max_stride))])
+            if not hasattr(detect_module, "strides"):
+                with torch.no_grad():
+                    detect_module.strides = torch.tensor([max_stride / x.shape[-2] for x in self.forward(torch.zeros(1, in_channel, max_stride, max_stride))])
+            else:
+                with torch.no_grad():
+                    self.forward(torch.zeros(1, in_channel, max_stride, max_stride))
                 # detect_module.strides = [max_stride / x.shape[-2] for x in self.forward(torch.zeros(1, self.in_channel, max_stride, max_stride))]
             if hasattr(detect_module, "anchors") and \
                 check_anchor_order(detect_module.anchors_grids, detect_module.strides):

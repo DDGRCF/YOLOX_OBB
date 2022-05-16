@@ -25,6 +25,15 @@ from torch.utils.data.sampler import Sampler
 #     def __iter__(self):
 #         for batch in super().__iter__():
 #             yield [(self.mosaic, idx) for idx in batch]
+class MaskAugBatchSampler(torchBatchSampler):
+    def __init__(self, *args, augmention=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.augmention = augmention
+
+    def __iter__(self):
+        for batch in super().__iter__():
+            yield [{"enable_augmention": self.augmention, "index": idx} for idx in batch]
+
 
 class MosaicBatchSampler(torchBatchSampler):
     """

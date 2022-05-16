@@ -10,6 +10,7 @@ from yolox.exp import OBBExp as MyExp
 class Exp(MyExp):
     def __init__(self):
         super().__init__()
+        self.dataset_config="configs/datasets/dota20.yaml"
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
         # -----train config-------#
         self.warmup_epochs=0

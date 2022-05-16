@@ -55,7 +55,7 @@ def parse_model(cfg_dict, ch):
 
         n = n_ = max(round(n * gd), 1) if n > 1 else n  # depth gain
         if m in [Conv, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, MixConv2d, Focus, CrossConv,
-                 BottleneckCSP, C3, C3TR, C3SPP, C3Ghost]:
+                 BottleneckCSP, C3, C3TR, C3SPP, C3Ghost, PPM, InstConv, nn.Conv2d]:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
                 c2 = make_divisible(c2 * gw, 8)
@@ -68,11 +68,17 @@ def parse_model(cfg_dict, ch):
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in [DetectX, DetectV5, OBBDetectX]:
+        elif m is Sum:
+            if isinstance(ch, list or tuple):
+                c2_ = [ch[x] for x in f]
+                c2 = c2_[0]
+                for x in c2_:
+                    assert x == c2
+        elif m is Coordinates:
+            c2 = ch[f] + 2
+        elif issubclass(m, Detect):
             kwargs["num_classes"] = nc
             args.append([ch[x] for x in f])
-            # if isinstance(args[1], int):  # number of anchors
-            #     args[1] = [list(range(args[1] * 2))] * len(f)
         elif m is Contract:
             c2 = ch[f] * args[0] ** 2
         elif m is Expand:

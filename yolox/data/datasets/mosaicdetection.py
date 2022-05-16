@@ -8,18 +8,24 @@ matplotlib.use("Agg")
 
 import random
 
+import os
 import cv2
 import numpy as np
 
 import BboxToolkit as bt
 from yolox.utils import (adjust_box_anns, get_local_rank, 
                          mintheta_obb, obb2poly, poly2obb_np, bbox2type)
+from yolox.utils.mask_utils import resize_mask, mask_overlaps
+from ..data_augment import (box_candidates, random_affine, obb_random_perspective, mask_random_affine)
+from .datasets_wrapper import Dataset, MaskDataset
+from yolox.utils.visualize import _COLORS
 
-from ..data_augment import (box_candidates, random_affine, 
-                                obb_random_perspective)
-from .datasets_wrapper import Dataset
-
-def debug_data(labels, img_o, save_name=None, minAreaRect_test=False, dir_name="DEBUG_IMAGES_VIS", save_dir=None):
+def debug_obb_data(labels, 
+                   img_o, 
+                   save_name=None, 
+                   minAreaRect_test=False, 
+                   dir_name="DEBUG_IMAGES_VIS", 
+                   save_dir=None):
     import os
     img = img_o.copy()
     if len(labels) == 0:
@@ -58,7 +64,103 @@ def debug_data(labels, img_o, save_name=None, minAreaRect_test=False, dir_name="
         cv2.putText(img, text, (ctr_x, ctr_y + txt_size[1]), font, 0.4, (100, 0, 100), thickness=1)
     save_path = os.path.join(save_name_dir, save_name + '.jpg')
     cv2.imwrite(save_path, img)
-    return True
+    return 0
+
+def debug_mask_data(labels, 
+               img, 
+               mask=None, 
+               class_names=None,
+               save_name=None, 
+               save_root=None, 
+               dir_name="DEBUG_IMAGES_VIS",
+               bbox_type="xyxy",
+               enable_txt=False):
+    assert bbox_type in ["xyxy", "cxcywh"]
+    if len(labels) == 0: 
+        return 0
+    if img.shape[-1] not in [1, 3] and img.ndim == 3:
+        img = img.transpose((1, 2, 0))
+        img = np.ascontiguousarray(img, dtype=np.uint8)
+    if img.dtype != np.uint8:
+        img = np.ascontiguousarray(img, dtype=np.uint8)
+    if save_name is None:
+        save_name = '0'
+    else:
+        if isinstance(save_name, int):
+            save_name = str(save_name)
+    if save_root is None:
+        save_root = "YOLOX_outputs"
+    save_name_dir = os.path.join(save_root, dir_name)
+    if not os.path.exists(save_name_dir):
+        os.makedirs(save_name_dir)
+    bboxes = labels[..., 1:]
+    if bbox_type == "cxcywh":
+        cxcy = bboxes[..., :2]
+        wh = bboxes[..., 2:]
+        x1y1 = cxcy - wh / 2
+        x2y2 = cxcy + wh / 2
+        bboxes = np.concatenate((x1y1, x2y2), axis=-1)
+    elif bbox_type == "xyxy":
+        pass
+    else:
+        raise NotImplemented
+
+    clses = labels[..., 0]
+    if mask is not None:
+        if isinstance(mask, list):
+            new_mask = []
+            for m in mask:
+                if m.dtype != np.uint8:
+                    new_mask.append(np.ascontiguousarray(m, dtype=np.uint8))
+                new_mask.append(m)
+            mask = new_mask
+    for i, (bbox, cls_id) in enumerate(zip(bboxes, clses)):
+        x0 = int(bbox[0]) 
+        y0 = int(bbox[1])
+        x1 = int(bbox[2])
+        y1 = int(bbox[3])
+        cls_id = int(cls_id)
+        color = (_COLORS[cls_id] * 255).astype(np.uint8).tolist()
+        text = '{}'.format(class_names[cls_id] if class_names is not None else cls_id)
+        txt_color = (0, 0, 0) if np.mean(_COLORS[cls_id]) > 0.5 else (255, 255, 255)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+
+        txt_size = cv2.getTextSize(text, font, 0.4, 1)[0]
+        cv2.rectangle(img, (x0, y0), (x1, y1), color, 2)
+        txt_bk_color = (_COLORS[cls_id] * 255 * 0.6).astype(np.uint8).tolist()
+        if enable_txt:
+            cv2.rectangle(
+                img,
+                (x0, y0+1),
+                (x0 + txt_size[0] + 1, y0 + int(1.5 * txt_size[1])),
+                txt_bk_color,
+                -1
+            )
+            cv2.putText(img, text, (x0, y0 + txt_size[1]), font, 0.4, txt_color, thickness=1)
+        # if mask is not None:
+        #     if i == 0:
+        #         mask_temp = mask.copy()
+        #     mask_temp = cv2.rectangle(mask_temp, (x0, y0), (x1, y1), color, 2)
+        if np.sum(bbox) == 0:
+            break
+    img = img.astype(np.uint8)
+    assert img.shape[-1] == 3, "img shape is {}".format(img.shape[-1])
+    num_targets = mask.shape[0]
+    for i in range(num_targets):
+        rand_id = np.random.randint(low=0, high=79)
+        color = (_COLORS[rand_id] * 255).astype(np.uint8).tolist()
+        if img.ndim == 2:
+            m_expand = np.astype(color[0], dtype=np.uint8)[None, None] * mask[..., None]
+        else:
+            m_expand = np.tile(mask[i][..., None], (1, 1, 3)) \
+                * np.asarray(color, dtype=np.uint8)[None, None, :]
+        assert m_expand.shape[-1] == 3, "mask shape is {}".format(m_expand.shape[-1])
+        m_expand = m_expand.astype(np.uint8)
+        cv2.addWeighted(img, 1.0, m_expand, 0.7, 0., dst=img)
+    img_save_path = os.path.join(save_name_dir, save_name + '.jpg')
+    cv2.imwrite(img_save_path, img)
+    return 1
+
 
 def get_mosaic_coordinate(mosaic_image, mosaic_index, xc, yc, w, h, input_h, input_w):
     # index0 to top left part of image
@@ -414,7 +516,7 @@ class MosaicOBBDetection(Dataset):
             mix_img, padded_labels = self.preproc(mosaic_img, mosaic_labels, self.input_dim)
             img_info = (mix_img.shape[1], mix_img.shape[0])
             if self.enable_debug:
-                debug_data(padded_labels, mix_img, str(idx.item()), 
+                debug_obb_data(padded_labels, mix_img, str(idx.item()), 
                 dir_name="DEBUG_IMAGES_VIS", save_dir=getattr(self, "work_dir", "./YOLOX_outputs"))
             return mix_img, padded_labels, img_info, img_id
 
@@ -458,17 +560,19 @@ class MosaicOBBDetection(Dataset):
         
         sample_labels = extra_labels[sample_inds]
         cp_labels = sample_labels.copy()
+        keep_labels = []
         for cp_label in cp_labels:
-            # iof = bt.bbox_overlaps(origin_labels, cp_label[:-1][None], mode="iof")
-            # if iof.all() < 0.5:
-            cv2.drawContours(
-                cp_img , [cp_label[:-1].reshape(-1, 1, 2).astype(np.int32)], 
-                -1, (255, 255, 255), cv2.FILLED)
-        # cropped_inst = cv2.bitwise_and(src1=extra_img, src2=cp_img)
+            iof = bt.bbox_overlaps(origin_labels, cp_label[:-1][None], mode="iof") # TODO:TEST
+            if (iof < 0.5).all():
+                keep_labels.append(cp_label)
+                cv2.drawContours(
+                    cp_img , [cp_label[:-1].reshape(-1, 1, 2).astype(np.int32)], 
+                    -1, (255, 255, 255), cv2.FILLED)
         inst_mask = cp_img > 0
-        # inst_mask = cropped_inst > 0
         origin_img[inst_mask] = extra_img[inst_mask]
-        origin_labels = np.vstack((origin_labels, sample_labels))
+        if len(keep_labels):
+            keep_labels = np.stack(keep_labels, axis=0)
+            origin_labels = np.vstack((origin_labels, keep_labels))
 
         return origin_img, origin_labels
 
@@ -592,3 +696,255 @@ class MosaicOBBDetection(Dataset):
         elif aug_type == "copy_paste":
             return self.copy_paste(origin_img, origin_labels, 
                     padded_cropped_img, labels, **kwargs)
+
+class MaskAugDataset(MaskDataset):
+    def __init__(
+        self, dataset, img_size, augmention=True, preproc=None,
+        degrees=10.0, translate=0.1, scale=(0.5, 1.5),
+        shear=2.0, mosaic_prob=1.0, 
+        enable_debug=False, copy_paste_prob=0.0,
+        *args, **kwargs
+    ):
+        super().__init__(img_size, augmention=augmention)
+        self._dataset = dataset
+        self.preproc = preproc
+        self.degrees = degrees
+        self.translate = translate
+        self.scale = scale
+        self.shear = shear
+        self.mosaic_prob = mosaic_prob
+        self.copy_paste_prob = copy_paste_prob
+
+        self.enable_augmention = augmention
+        self.enable_debug = enable_debug
+        self.local_rank = get_local_rank()
+
+    def __len__(self):
+        return len(self._dataset)
+    
+    @Dataset.wrapper_getitem
+    def __getitem__(self, idx):
+        if self.enable_augmention:
+            input_dim = self._dataset.input_dim
+            input_h, input_w = input_dim[0], input_dim[1]
+            if random.random() < self.mosaic_prob:
+                mosaic_labels = []
+                # yc, xc = s, s  # mosaic center x, y
+                yc = int(random.uniform(0.5 * input_h, 1.5 * input_h))
+                xc = int(random.uniform(0.5 * input_w, 1.5 * input_w))
+
+                # 3 additional image indices
+                indices = [idx] + [random.randint(0, len(self._dataset) - 1) for _ in range(3)]
+
+                for i_mosaic, index in enumerate(indices):
+                    img, _labels, _, img_id, masks = self._dataset.pull_item(index)
+                    h0, w0 = img.shape[:2]  # orig hw
+                    scale = min(1. * input_h / h0, 1. * input_w / w0)
+                    img = cv2.resize(
+                        img, (int(w0 * scale), int(h0 * scale)), interpolation=cv2.INTER_LINEAR
+                    )
+
+                    # generate output mosaic image
+                    (h, w, c) = img.shape[:3]
+                    if i_mosaic == 0:
+                        mosaic_img = np.full((input_h * 2, input_w * 2, c), 114, dtype=np.uint8)
+
+                    # suffix l means large image, while s means small image in mosaic aug.
+                    (l_x1, l_y1, l_x2, l_y2), (s_x1, s_y1, s_x2, s_y2) = get_mosaic_coordinate(
+                        mosaic_img, i_mosaic, xc, yc, w, h, input_h, input_w
+                    )
+
+                    mosaic_img[l_y1:l_y2, l_x1:l_x2] = img[s_y1:s_y2, s_x1:s_x2]
+                    padw, padh = l_x1 - s_x1, l_y1 - s_y1
+
+                    # mask_deals
+                    num_targets = len(_labels)
+                    if i_mosaic == 0:
+                        mosaic_masks = []
+                    if num_targets:
+                        masks = resize_mask(
+                            masks, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR
+                        )
+                        mosaic_mask = np.full((input_h * 2, input_w * 2, num_targets), 0, dtype=np.uint8)
+                        mosaic_mask[l_y1:l_y2, l_x1:l_x2] = masks[s_y1:s_y2, s_x1:s_x2]
+                        mosaic_masks.append(mosaic_mask)
+
+                    labels = _labels.copy()
+                    # Normalized xywh to pixel xyxy format
+                    if _labels.size > 0:
+                        labels[:, 0] = scale * _labels[:, 0] + padw
+                        labels[:, 1] = scale * _labels[:, 1] + padh
+                        labels[:, 2] = scale * _labels[:, 2] + padw
+                        labels[:, 3] = scale * _labels[:, 3] + padh
+
+                    mosaic_labels.append(labels)
+
+                mosaic_masks = np.concatenate(mosaic_masks, axis=-1) # (2 * input_h, 2 * input_w, num_targets)
+                    
+                if len(mosaic_labels):
+                    mosaic_labels = np.concatenate(mosaic_labels, 0)
+                    np.clip(mosaic_labels[:, 0], 0, 2 * input_w, out=mosaic_labels[:, 0])
+                    np.clip(mosaic_labels[:, 1], 0, 2 * input_h, out=mosaic_labels[:, 1])
+                    np.clip(mosaic_labels[:, 2], 0, 2 * input_w, out=mosaic_labels[:, 2])
+                    np.clip(mosaic_labels[:, 3], 0, 2 * input_h, out=mosaic_labels[:, 3])
+            else:
+                img, _labels, _, img_id, masks = self._dataset.pull_item(index)
+                h0, w0 = img.shape[:2]
+                scale = min(1. * input_h / h0, 1 * input_w / w0)
+                img = cv2.resize(
+                    img, (int(w0 * scale), int(h0 * scale)), interpolation=cv2.INTER_LINEAR
+                )
+                (h, w, c) = img.shape[:3]
+                mosaic_img = np.full((input_h, input_w, c), 114, dtype=np.uint8)
+                mosaic_img[:h, :w, :] = img
+                num_targets = len(_labels)
+                masks = resize_mask(masks, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
+                mosaic_masks = np.full((input_h, input_w, num_targets), 0, dtype=np.uint8)
+                mosaic_masks [:h, :w] = masks
+                mosaic_labels = _labels.copy()
+
+            mosaic_img, mosaic_labels, mosaic_masks = mask_random_affine(
+                mosaic_img,
+                mosaic_labels,
+                masks=mosaic_masks,
+                target_size=(input_w, input_h),
+                degrees=self.degrees,
+                translate=self.translate,
+                scales=self.scale,
+                shear=self.shear,
+            )
+
+            if random.random() < self.copy_paste_prob:
+                mosaic_img, mosaic_labels, mosaic_masks = self.copy_paste(
+                    mosaic_img, mosaic_labels, mosaic_masks, self.input_dim
+                )
+
+            mosaic_img, mosaic_labels, mosaic_masks = self.preproc(
+                mosaic_img, mosaic_labels, self.input_dim, mask_targets=mosaic_masks)
+
+            if self.enable_debug and mosaic_labels.sum() > 0:
+                debug_mask_data(mosaic_labels.copy(), 
+                           mosaic_img.copy(), 
+                           mosaic_masks.copy(), 
+                           class_names=self._dataset._classes, 
+                           save_name=index, 
+                           bbox_type='cxcywh')
+
+            img_info = (mosaic_img.shape[1], mosaic_img.shape[0])
+            return mosaic_img, mosaic_labels, mosaic_masks, img_info, img_id
+
+        else:
+            self._dataset._input_dim = self.input_dim
+            img, label, img_info, img_id, mask = self._dataset.pull_item(idx)
+            img, label, mask = self.preproc(img, label, self.input_dim, mask)
+            return img, label, mask, img_info, img_id
+        
+    def copy_paste(self, origin_img, origin_labels, origin_masks, input_dim, iof_thre=0.5):
+        jit_factor = random.uniform(*self.scale)
+        jit_input_dim = (int(input_dim[0] * jit_factor), int(input_dim[1] * jit_factor))
+        FLIP = random.uniform(0, 1) > 0.5
+        cp_labels = []
+        while len(cp_labels) == 0:
+            cp_index = random.randint(0, self.__len__() - 1)
+            cp_labels = self._dataset.load_anno(cp_index)
+        img, cp_labels, _, _, masks = self._dataset.pull_item(cp_index)
+
+        if len(img.shape) == 3:
+            cp_img = np.ones((jit_input_dim[0], jit_input_dim[1], 3), dtype=np.uint8) * 114
+        else:
+            cp_img = np.ones(jit_input_dim, dtype=np.uint8) * 114
+        
+        cp_scale_ratio = min(jit_input_dim[0] / img.shape[0], jit_input_dim[1] / img.shape[1])
+
+        resized_img = cv2.resize(
+            img,
+            (int(img.shape[1] * cp_scale_ratio), int(img.shape[0] * cp_scale_ratio)),
+            interpolation=cv2.INTER_LINEAR,
+        )
+
+        cp_img[: resized_img.shape[0], : resized_img.shape[1]] = resized_img
+
+
+        if FLIP:
+            cp_img = cp_img[:, ::-1, :]
+
+        origin_h, origin_w = cp_img.shape[:2]
+        target_h, target_w = origin_img.shape[:2]
+        padded_img = np.zeros(
+            (max(origin_h, target_h), max(origin_w, target_w), 3), dtype=np.uint8
+        )
+        padded_img[:origin_h, :origin_w] = cp_img
+
+        x_offset, y_offset = 0, 0
+        if padded_img.shape[0] > target_h:
+            y_offset = random.randint(0, padded_img.shape[0] - target_h - 1)
+        if padded_img.shape[1] > target_w:
+            x_offset = random.randint(0, padded_img.shape[1] - target_w - 1)
+        padded_cropped_img = padded_img[
+            y_offset: y_offset + target_h, x_offset: x_offset + target_w
+        ]
+
+        num_targets = len(cp_labels)
+        cp_masks = np.zeros(
+            (jit_input_dim[0], jit_input_dim[1], num_targets), dtype=np.uint8
+        )
+        resized_masks = resize_mask(
+            masks, (int(masks.shape[1] * cp_scale_ratio), int(masks.shape[0] * cp_scale_ratio)),
+            interpolation=cv2.INTER_LINEAR
+        )
+        cp_masks[: resized_masks.shape[0], : resized_masks.shape[1]] = resized_masks
+
+        if FLIP:
+            cp_masks = cp_masks[:, ::-1, :]
+        padded_masks = np.zeros((padded_img.shape[0], padded_img.shape[1], num_targets), dtype=np.uint8)
+        padded_masks[:origin_h, :origin_w] = cp_masks
+
+        padded_cropped_masks = padded_masks[
+            y_offset: y_offset + target_h, x_offset: x_offset + target_w
+        ]
+
+        cp_bboxes_origin_np = adjust_box_anns(
+            cp_labels[:, :4].copy(), cp_scale_ratio, 0, 0, origin_w, origin_h
+        )
+
+        if FLIP:
+            cp_bboxes_origin_np[:, 0::2] = (
+                origin_w - cp_bboxes_origin_np[:, 0::2][:, ::-1]
+            )
+
+        cp_bboxes_transformed_np = cp_bboxes_origin_np.copy()
+        cp_bboxes_transformed_np[:, 0::2] = np.clip(
+            cp_bboxes_transformed_np[:, 0::2] - x_offset, 0, target_w
+        )
+        cp_bboxes_transformed_np[:, 1::2] = np.clip(
+            cp_bboxes_transformed_np[:, 1::2] - y_offset, 0, target_h
+        )
+
+        cls_labels = cp_labels[:, 4:].copy()
+        box_labels = cp_bboxes_transformed_np
+        labels = np.hstack((box_labels, cls_labels))
+        mask_iof = mask_overlaps(origin_masks, padded_cropped_masks, n_first=False, is_aligned=False, mode="iof") # (n1, n2)
+        empty_img = np.zeros(padded_cropped_img.shape, dtype=np.uint8)
+        keep_labels = []
+        keep_masks = []
+        for i, label in enumerate(labels):
+            if (mask_iof[:, i] < iof_thre).all():
+                keep_labels.append(label)
+                keep_masks.append(padded_cropped_masks[..., i])
+                empty_img += padded_cropped_masks[..., [i]]
+                # cv2.drawContours(
+                #     empty_img , [label[:-1].reshape(-1, 1, 2).astype(np.int32)], 
+                #     -1, (255, 255, 255), cv2.FILLED)
+        inst_mask = empty_img > 0
+        origin_img[inst_mask] = padded_cropped_img[inst_mask]
+        if len(keep_labels):
+            keep_labels = np.stack(keep_labels, axis=0)
+            keep_masks = np.stack(keep_masks, axis=-1)
+            origin_labels = np.vstack((origin_labels, keep_labels))
+            # origin_img = origin_img.astype(np.float32)
+            # origin_img = 0.5 * origin_img + 0.5 * padded_cropped_img.astype(np.float32)
+            origin_masks = np.concatenate((origin_masks, keep_masks), axis=-1, dtype=np.uint8)
+
+
+        return origin_img.astype(np.uint8), origin_labels, origin_masks
+

@@ -13,12 +13,12 @@ from .base_exp import BaseExp
 from loguru import logger
 
 
-class Exp(BaseExp):
+class MaskExp(BaseExp):
     def __init__(self):
         super().__init__()
         # ----------------config------------------------#
-        self.modules_config = "configs/modules/yoloxs.yaml"
-        self.losses_config = "configs/losses/yolox_losses.yaml"
+        self.modules_config = "configs/modules/sparseinst_darknet.yaml"
+        self.losses_config = "configs/losses/sparseinst_losses.yaml"
         self.dataset_config="configs/datasets/coco.yaml"
         # ---------------- dataloader config ---------------- #
         # set worker to 4 for shorter dataloader init time
@@ -32,16 +32,14 @@ class Exp(BaseExp):
         # self.random_size = (14, 26)
         # --------------- transform config ----------------- #
         self.mosaic_prob = 1.0
-        self.mixup_prob = 1.0
+        self.copy_paste_prob = 1.0
+
         self.hsv_prob = 1.0
         self.flip_prob = 0.5
         self.degrees = 10.0
         self.translate = 0.1
-        self.mosaic_scale = (0.1, 2)
-        self.mixup_scale = (0.5, 1.5)
+        self.scale = (0.8, 1.2) # (0.1, 2.0)
         self.shear = 2.0
-        self.perspective = 0.0
-        self.enable_mixup = True
 
         # --------------  training config --------------------- #
         self.warmup_epochs = 5
@@ -61,13 +59,13 @@ class Exp(BaseExp):
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
 
         # -----------------  testing config ------------------ #
+        self.enable_debug = False
         self.test_size = (640, 640)
         self.postprocess_cfg = dict(
             conf_thre=0.01,
             nms_thre=0.65
         )
         self._get_data_info(self.dataset_config)
-
 
     def get_model(self):
         from yolox.models import Model
@@ -78,19 +76,20 @@ class Exp(BaseExp):
         return self.model
 
     def get_data_prefetcher(self, train_loader, data_type):
-        from yolox.data import DataPrefetcher
-        return DataPrefetcher(train_loader, data_type)
+        from yolox.data import MaskDataPrefetcher
+        return MaskDataPrefetcher(train_loader, data_type)
 
     def get_data_loader(
         self, batch_size, is_distributed, no_aug=False, cache_img=False
     ):
         from yolox.data import (
-            COCODataset,
-            TrainTransform,
-            MosaicBatchSampler,
+            COCOInstanceDataset,
+            MaskTrainTransform,
+            MaskAugBatchSampler,
             DataLoader,
             InfiniteSampler,
-            MosaicDetection,
+            MaskAugDataset,
+            mask_collate,
             worker_init_reset_seed,
         )
         from yolox.utils import (
@@ -101,33 +100,31 @@ class Exp(BaseExp):
         local_rank = get_local_rank()
 
         with wait_for_the_master(local_rank):
-            dataset = COCODataset(
+            dataset = COCOInstanceDataset(
                 data_dir=self.data_dir,
                 json_file=self.train_ann,
                 img_size=self.input_size,
-                preproc=TrainTransform(
+                preproc=MaskTrainTransform(
                     max_labels=50,
                     flip_prob=self.flip_prob,
                     hsv_prob=self.hsv_prob),
                 cache=cache_img)
 
-        dataset = MosaicDetection(
+        dataset = MaskAugDataset(
             dataset,
             mosaic=not no_aug,
             img_size=self.input_size,
-            preproc=TrainTransform(
+            preproc=MaskTrainTransform(
                 max_labels=120,
                 flip_prob=self.flip_prob,
                 hsv_prob=self.hsv_prob),
             degrees=self.degrees,
             translate=self.translate,
-            mosaic_scale=self.mosaic_scale,
-            mixup_scale=self.mixup_scale,
+            scale=self.scale,
             shear=self.shear,
-            perspective=self.perspective,
-            enable_mixup=self.enable_mixup,
             mosaic_prob=self.mosaic_prob,
-            mixup_prob=self.mixup_prob,
+            copy_paste_prob=self.copy_paste_prob,
+            enable_debug=self.enable_debug
         )
 
         self.dataset = dataset
@@ -137,11 +134,11 @@ class Exp(BaseExp):
 
         sampler = InfiniteSampler(len(self.dataset), seed=self.seed if self.seed else 0)
 
-        batch_sampler = MosaicBatchSampler(
+        batch_sampler = MaskAugBatchSampler(
             sampler=sampler,
             batch_size=batch_size,
             drop_last=False,
-            mosaic=not no_aug,
+            augmention=not no_aug,
         )
 
         dataloader_kwargs = {"num_workers": self.data_num_workers, "pin_memory": True}
@@ -150,6 +147,7 @@ class Exp(BaseExp):
         # Make sure each process has different random seed, especially for 'fork' method.
         # Check https://github.com/pytorch/pytorch/issues/63311 for more details.
         dataloader_kwargs["worker_init_fn"] = worker_init_reset_seed
+        dataloader_kwargs["collate_fn"] = mask_collate
 
         train_loader = DataLoader(self.dataset, **dataloader_kwargs)
 
@@ -177,6 +175,8 @@ class Exp(BaseExp):
         return input_size
 
     def preprocess(self, inputs, targets, tsize):
+        t_masks = targets[1]
+        targets = targets[0]
         scale_y = tsize[0] / self.input_size[0]
         scale_x = tsize[1] / self.input_size[1]
         if scale_x != 1 or scale_y != 1:
@@ -185,7 +185,7 @@ class Exp(BaseExp):
             )
             targets[..., 1::2] = targets[..., 1::2] * scale_x
             targets[..., 2::2] = targets[..., 2::2] * scale_y
-        return inputs, targets
+        return inputs, (targets, t_masks)
 
     def get_optimizer(self, batch_size):
         if "optimizer" not in self.__dict__:

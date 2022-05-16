@@ -14,7 +14,6 @@ from loguru import logger
 
 from yolox.utils import LRScheduler
 
-
 class BaseExp(metaclass=ABCMeta):
     """Basic class for any experiment."""
 
@@ -35,6 +34,10 @@ class BaseExp(metaclass=ABCMeta):
         else:   
             raise NotImplementedError
         self.__dict__.update(cfg_dict)
+
+    @abstractmethod
+    def get_data_prefetcher(self, train_loader):
+        pass
 
     @abstractmethod
     def get_model(self) -> Module:
@@ -64,19 +67,6 @@ class BaseExp(metaclass=ABCMeta):
     def eval(self, model, evaluator, weights):
         pass
 
-    # def merge(self, cfg_list):
-    #     assert len(cfg_list) % 2 == 0
-    #     for k, v in zip(cfg_list[0::2], cfg_list[1::2]):
-    #         # only update value with same key
-    #         if hasattr(self, k):
-    #             src_value = getattr(self, k)
-    #             src_type = type(src_value)
-    #             if src_value is not None and src_type != type(v):
-    #                 try:
-    #                     v = src_type(v)
-    #                 except Exception:
-    #                     v = ast.literal_eval(v)
-    #             setattr(self, k, v)
     def merge(self, args):
         if args is not None:
             for arg_name in args:

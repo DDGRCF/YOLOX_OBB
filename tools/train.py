@@ -11,7 +11,7 @@ import torch
 import torch.backends.cudnn as cudnn
 
 from yolox.core import Trainer, launch
-from yolox.exp import get_exp
+from yolox.exp import get_exp, Exp, OBBExp, MaskExp
 from yolox.utils import configure_nccl, configure_omp, get_num_devices, DictAction
 
 def make_parser():
@@ -104,7 +104,6 @@ def main(exp, args):
     configure_nccl()
     configure_omp()
     cudnn.benchmark = True
-
     trainer = Trainer(exp, args)
     trainer.train()
 

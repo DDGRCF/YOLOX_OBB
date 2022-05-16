@@ -1,0 +1,15 @@
+Functions:
+  class_loss: 
+    func: FocalLoss
+    args: [2, sum, True, 2.0, 0.25]
+  dice_loss: 
+    func: DiceLoss
+    args: [2, sum, sqrt]
+  bce_loss:
+    func: CrossEntropyLoss
+    args: [5, mean, "bce_use_sigmoid"]
+  obj_loss:
+    func: CrossEntropyLoss
+    args: [1, mean, "bce_use_sigmoid"]
+Args:
+  prior_prob: 0.01

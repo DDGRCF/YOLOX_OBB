@@ -85,8 +85,6 @@ class DataLoader(torchDataLoader):
 
         self.__initialized = True
 
-    # def close_mosaic(self): # TODO: DELETE
-    #     self.batch_sampler.mosaic = False
 
     def set_sampler_property(self, name, value):
         setattr(self.batch_sampler, name, value)
@@ -106,6 +104,13 @@ def list_collate(batch):
         else:
             items[i] = default_collate(items[i])
 
+    return items
+
+# index 2 is masks list
+def mask_collate(batch): 
+    items = list(zip(*batch))
+    items = [item if i==2 else default_collate(item) \
+                for i, item in enumerate(items)]
     return items
 
 

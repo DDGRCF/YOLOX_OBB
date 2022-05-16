@@ -140,6 +140,29 @@ def box_ioa_filter(t_labels, o_labels, ioa_thre=0.30, eps=1e-6):
     return t_labels[keep_inds]
 
 
+def mask_random_affine(
+    img,
+    targets=(),
+    masks=None,
+    target_size=(640, 640),
+    degrees=10,
+    translate=0.1,
+    scales=0.1,
+    shear=10,
+):
+    M, scale = get_affine_matrix(target_size, degrees, translate, scales, shear)
+
+    img = cv2.warpAffine(img, M, dsize=target_size, borderValue=(114, 114, 114))
+
+    # Transform label coordinates
+    if len(targets):
+        targets = apply_affine_to_bboxes(targets, target_size, M, scale)
+        masks = cv2.warpAffine(masks, M, dsize=target_size, borderValue=0.)
+        if masks.ndim == 2:
+            masks = masks[..., None]
+
+    return img, targets, masks
+
 def random_affine(
     img,
     targets=(),
@@ -251,22 +274,53 @@ def _mirror(image, boxes, prob=0.5):
 
     return image, boxes
 
+def _mask_mirror(image, boxes, prob=0.5, masks=None):
+    _, width, _ = image.shape
+    if random.random() < prob:
+        image = image[:, ::-1]
+        boxes[:, 0::2] = width - boxes[:, 2::-2]
+        if masks is not None:
+            masks = masks[:, ::-1]
+    return image, boxes, masks
 
-def preproc(img, input_size, swap=(2, 0, 1)):
+
+# def preproc(img, input_size, swap=(2, 0, 1)):
+#     if len(img.shape) == 3:
+#         padded_img = np.ones((input_size[0], input_size[1], 3), dtype=np.uint8) * 114
+#     else:
+#         padded_img = np.ones(input_size, dtype=np.uint8) * 114
+
+#     r = min(input_size[0] / img.shape[0], input_size[1] / img.shape[1])
+#     resized_img = cv2.resize(
+#         img,
+#         (int(img.shape[1] * r), int(img.shape[0] * r)),
+#         interpolation=cv2.INTER_LINEAR,
+#     ).astype(np.uint8)
+#     padded_img[: int(img.shape[0] * r), : int(img.shape[1] * r)] = resized_img
+
+#     padded_img = padded_img.transpose(swap)
+#     padded_img = np.ascontiguousarray(padded_img, dtype=np.float32)
+#     return padded_img, r
+
+def preproc(img, input_size, swap=(2, 0, 1), padding_value=114):
     if len(img.shape) == 3:
-        padded_img = np.ones((input_size[0], input_size[1], 3), dtype=np.uint8) * 114
+        padded_img = np.ones((input_size[0], input_size[1], img.shape[-1]), dtype=np.uint8) * padding_value
     else:
-        padded_img = np.ones(input_size, dtype=np.uint8) * 114
+        padded_img = np.ones(input_size, dtype=np.uint8) * padding_value
 
     r = min(input_size[0] / img.shape[0], input_size[1] / img.shape[1])
+    origin_dim = img.ndim
     resized_img = cv2.resize(
         img,
         (int(img.shape[1] * r), int(img.shape[0] * r)),
         interpolation=cv2.INTER_LINEAR,
     ).astype(np.uint8)
+    resized_dim = resized_img.ndim
+    if origin_dim != resized_dim:
+        resized_img = resized_img[..., None]
     padded_img[: int(img.shape[0] * r), : int(img.shape[1] * r)] = resized_img
-
-    padded_img = padded_img.transpose(swap)
+    if swap is not None:
+        padded_img = padded_img.transpose(swap)
     padded_img = np.ascontiguousarray(padded_img, dtype=np.float32)
     return padded_img, r
 
@@ -455,3 +509,82 @@ class ValTransform:
             img -= np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
             img /= np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
         return img, np.zeros((1, 6))
+class MaskTrainTransform:
+    def __init__(self, max_labels=50, flip_prob=0.5, hsv_prob=1.0, with_mask=False):
+        self.max_labels = max_labels
+        self.flip_prob = flip_prob
+        self.hsv_prob = hsv_prob
+
+    def _mask_filter(self, masks, keep_inds=None, is_tolist=False):
+        if keep_inds is not None:
+            masks = masks[..., keep_inds]
+        if is_tolist:
+            return [masks[..., i] for i in range(masks.shape[-1])]
+        else:
+            return masks
+
+    def __call__(self, image, bbox_targets, input_dim, mask_targets=None):
+        num_targets = len(bbox_targets)
+        boxes = bbox_targets[:, :4].copy()
+        labels = bbox_targets[:, 4].copy()
+            
+        if len(boxes) == 0:
+            bbox_targets = np.zeros((self.max_labels, 5), dtype=np.float32)
+            image = preproc(image, input_dim)[0]
+            mask_targets = np.zeros((0, input_dim[0], input_dim[1]), dtype=np.float32)
+            return image, bbox_targets, mask_targets
+
+        image_o = image.copy()
+        bbox_targets_o = bbox_targets.copy()
+        masks_o = mask_targets.copy()
+        boxes_o = bbox_targets_o[:, :4]
+        labels_o = bbox_targets_o[:, 4]
+        boxes_o = xyxy2cxcywh(boxes_o)
+
+        if random.random() < self.hsv_prob:
+            augment_hsv(image)
+
+        image_t, boxes, masks = _mask_mirror(image, boxes, self.flip_prob, masks=mask_targets)
+        # height, width, _ = image_t.shape
+        image_t, r_ = preproc(image_t, input_dim)
+        # if self.with_mask:
+        #     mask_t = preproc(mask_t, input_dim, swap=None, padding_value=0.)[0]
+
+        # boxes [xyxy] 2 [cx,cy,w,h]
+        boxes = xyxy2cxcywh(boxes)
+        boxes *= r_
+
+        filter_b = np.minimum(boxes[:, 2], boxes[:, 3]) > 1
+        boxes_t = boxes[filter_b]
+        labels_t = labels[filter_b]
+
+        if len(boxes_t) == 0:
+            image_t, r_o = preproc(image_o, input_dim)
+            boxes_o *= r_o
+            boxes_t = boxes_o
+            labels_t = labels_o
+            masks_t = preproc(masks_o, (input_dim[0], input_dim[1], num_targets), None, 0.)[0]
+            masks_t = self._mask_filter(masks_t, None, is_tolist=False)
+        else:
+            keep_inds = np.nonzero(filter_b)[0]
+            masks = preproc(masks, (input_dim[0], input_dim[1], num_targets), None, 0.)[0]
+            masks_t = self._mask_filter(masks, keep_inds, is_tolist=False)
+
+
+        labels_t = np.expand_dims(labels_t, 1)
+
+        targets_t = np.hstack((labels_t, boxes_t))
+        padded_labels = np.zeros((self.max_labels, targets_t.shape[-1]))
+        padded_labels[range(len(targets_t))[: self.max_labels]] = targets_t[
+            : self.max_labels
+        ]
+        if isinstance(masks_t, list):
+            masks_t = masks_t[ :self.max_labels]
+        elif isinstance(masks_t, np.ndarray):
+            masks_t = masks_t[..., :self.max_labels]
+
+        padded_labels = np.ascontiguousarray(padded_labels, dtype=np.float32)
+
+        return (image_t, 
+                padded_labels, 
+                masks_t.transpose(2, 0, 1))

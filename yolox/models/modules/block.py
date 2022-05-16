@@ -2,20 +2,51 @@ import math
 import torch
 import numpy as np
 import torch.nn as nn
+import torch.nn.functional as F
 from .common import *
-
 class CrossConv(nn.Module):
     # Cross Convolution Downsample
-    def __init__(self, c1, c2, k=3, s=1, g=1, e=1.0, shortcut=False):
+    def __init__(self, c1, c2, k=3, s=1, g=1, e=1.0, shortcut=False, **kwargs):
         # ch_in, ch_out, kernel, stride, groups, expansion, shortcut
         super().__init__()
         c_ = int(c2 * e)  # hidden channels
-        self.cv1 = Conv(c1, c_, (1, k), (1, s))
-        self.cv2 = Conv(c_, c2, (k, 1), (s, 1), g=g)
+        self.cv1 = Conv(c1, c_, (1, k), (1, s), **kwargs)
+        self.cv2 = Conv(c_, c2, (k, 1), (s, 1), g=g, **kwargs)
         self.add = shortcut and c1 == c2
 
     def forward(self, x):
         return x + self.cv2(self.cv1(x)) if self.add else self.cv2(self.cv1(x))
+
+class PPM(nn.Module):
+
+    def __init__(self, in_channels, out_channels=512, sizes=(1, 2, 3, 6), norm_func=None, act_func=nn.ReLU, **kwargs):
+        super().__init__()
+        assert out_channels % len(sizes) == 0
+        channels = out_channels // len(sizes)
+        self.stages = []
+        self.act_func = act_func
+        self.norm_func = norm_func
+        self.stages = nn.ModuleList(
+            [self._make_stage(in_channels, channels, size, **kwargs) for size in sizes]
+        )
+        # self.bottleneck = nn.Conv2d(
+        #     in_channels + len(sizes) * channels, in_channels, 1)
+        self.bottleneck = Conv(
+            in_channels + len(sizes) * channels, in_channels, 1, norm_func=norm_func, act_func=act_func, **kwargs
+        )
+
+    def _make_stage(self, features, out_features, size, **kwargs):
+        prior = nn.AdaptiveAvgPool2d(output_size=(size, size))
+        conv = Conv(features, out_features, 1, norm_func=self.norm_func, act_func=self.act_func, **kwargs)
+        return nn.Sequential(prior, conv)
+
+    def forward(self, feats):
+        h, w = feats.size(2), feats.size(3)
+        priors = [F.interpolate(input=stage(feats), size=(
+            h, w), mode='bilinear', align_corners=False) for stage in self.stages] + [feats] # why
+        # out = F.relu_(self.bottleneck(torch.cat(priors, 1)))
+        out = self.bottleneck(torch.cat(priors, 1))
+        return out
 
 class Sum(nn.Module):
     # Weighted sum of 2 or more layers https://arxiv.org/abs/1911.09070
@@ -241,3 +272,47 @@ class BottleneckCSP(nn.Module):
         y2 = self.cv2(x)
         return self.cv4(self.act(self.bn(torch.cat((y1, y2), dim=1))))
 
+
+class Coordinates(nn.Module):
+    def __init__(self, mode="absolute"):
+        super().__init__()
+        self.mode = mode
+
+    def forward(self, x):
+        if self.mode == "absolute":
+            h, w = x.size()[-2:]
+            y_loc = torch.linspace(-1, 1, h, device=x.device)
+            x_loc = torch.linspace(-1, 1, w, device=x.device)
+            y_loc, x_loc = torch.meshgrid(y_loc, x_loc)
+            y_loc = y_loc.expand([x.shape[0], 1, -1, -1])
+            x_loc = x_loc.expand([x.shape[0], 1, -1, -1])
+            locations = torch.cat([x_loc, y_loc], 1).to(x)
+            x = torch.cat([locations, x], dim=1)
+        elif self.mode == "relative":
+            raise NotImplementedError
+        return x
+ 
+class InstConv(nn.Module):
+    # CSP Bottleneck with 3 convolutions
+    def __init__(self, c1, c2, n=1, k=[3], s=[1], p=[-1], a=[nn.ReLU], **kwargs):  # ch_in, ch_out, number, shortcut, groups, expansion
+        super().__init__()
+        self.convs = nn.ModuleList()
+        kwargs.pop("act_func", None)
+        kwargs.pop("p", None)
+        kwargs.pop("k", None)
+        kwargs.pop("s", None)
+        kwargs.pop("norm_func", None)
+        a = [a] * n if not isinstance(a, list or tuple) else a
+        s = [s] * n if not isinstance(s, list or tuple) else s
+        k = [k] * n if not isinstance(k, list or tuple) else k
+        p = [p] * n if not isinstance(p, list or tuple) else p
+        for i in range(n):
+            a_i = a[i] if i < len(a) else None
+            s_i = s[i] if i < len(s) else None
+            k_i = k[i] if i < len(k) else None
+            p_i = p[i] if i < len(p) else None
+            self.convs.append(Conv(c1, c2, k=k_i, s=s_i, p=p_i, act_func=a_i, norm_func=None, **kwargs))
+            c1 = c2
+
+    def forward(self, x):
+        return nn.Sequential(*self.convs)(x)

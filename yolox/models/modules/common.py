@@ -28,7 +28,8 @@ class Conv(nn.Module):
         b=False,
         norm_func=nn.BatchNorm2d, 
         act_func=nn.SiLU,
-        init_func=None):
+        init_func=None,
+        inplace=False):
         super().__init__()
         if isinstance(p, int):
             if p == -1:
@@ -48,7 +49,7 @@ class Conv(nn.Module):
             groups=g,
             bias=b)
         self.bn = norm_func(c2) if norm_func is not None else nn.Identity()
-        self.act = act_func() if act_func is not None else nn.Identity() 
+        self.act = act_func(inplace=inplace) if act_func is not None else nn.Identity() 
         if init_func is not None:
             init_func(self.cv)
 

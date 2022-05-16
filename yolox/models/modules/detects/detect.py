@@ -10,7 +10,7 @@ from yolox.models.losses import *
 class Detect(nn.Module):
     def __init__(self, **kwargs):
         super().__init__()
-    
+
     def get_losses(*args):
         logger.info("Get Losses Func is Empty")
 

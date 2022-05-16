@@ -26,6 +26,7 @@ __all__ = [
     "wait_for_the_master",
     "is_main_process",
     "synchronize",
+    "is_dist_avail_and_initialized",
     "get_world_size",
     "get_rank",
     "get_local_rank",
@@ -77,6 +78,13 @@ def synchronize():
     if world_size == 1:
         return
     dist.barrier()
+
+def is_dist_avail_and_initialized():
+    if not dist.is_available():
+        return 0
+    if not dist.is_initialized():
+        return 0
+    return 1
 
 
 def get_world_size() -> int:

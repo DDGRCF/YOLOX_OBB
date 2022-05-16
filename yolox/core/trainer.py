@@ -93,19 +93,18 @@ class Trainer:
         iter_start_time = time.time()
 
         inps, targets = self.prefetcher.next()
-        inps = inps.to(self.data_type)
-        targets = targets.to(self.data_type)
-        targets.requires_grad = False
+        # inps = inps.to(self.data_type)
+        # targets = targets.to(self.data_type)
+        # targets.requires_grad = False
         inps, targets = self.exp.preprocess(inps, targets, self.input_size)
         data_end_time = time.time()
 
-
         with torch.cuda.amp.autocast(enabled=self.amp_training):
-            # outputs = self.model(inps, targets)
-            loss = 0.
+            loss = inps.new_tensor(0.)
             outputs = self.model.get_losses(targets, inps)
-            for l in outputs.values():
-                loss += l
+            for k, v in outputs.items():
+                if k.startswith("loss"):
+                    loss += v
         outputs["total_loss"] = loss
         self.optimizer.zero_grad()
         self.scaler.scale(loss).backward()
@@ -155,7 +154,7 @@ class Trainer:
             cache_img=self.args.cache,
         )
         logger.info("init prefetcher, this might take one minute or less...")
-        self.prefetcher = DataPrefetcher(self.train_loader)
+        self.prefetcher = self.exp.get_data_prefetcher(self.train_loader, self.data_type)
         # max_iter means iters per epoch
         self.max_iter = len(self.train_loader)
 

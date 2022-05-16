@@ -64,6 +64,25 @@ def get_extensions():
                 'src/nms_rotated_cuda.cu',
                 'src/poly_nms_cuda.cu']
         ),
+        make_cuda_ext(
+            name = 'roi_align_ext',
+            module = 'yolox.ops.pytorch.roi_align',
+            sources=[
+                'src/roi_align_ext.cpp',
+                'src/cpu/roi_align_v2.cpp',
+            ],
+            sources_cuda=[
+                'src/cuda/roi_align_kernel.cu',
+                'src/cuda/roi_align_kernel_v2.cu'
+        ]),
+        make_cuda_ext(
+            name='roi_align_rotated_ext',
+            module='yolox.ops.pytorch.roi_align_rotated',
+            sources=[
+                'src/roi_align_rotated_cpu.cpp',
+                'src/roi_align_rotated_ext.cpp'
+            ],
+            sources_cuda=['src/roi_align_rotated_cuda.cu']),
         make_onnxruntime_ext(
             name="ort_ext",
             module="yolox.ops.onnxruntime",

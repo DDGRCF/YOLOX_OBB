@@ -4,11 +4,12 @@
 
 import cv2
 import numpy as np
+from .mask_utils import mask_find_bboxes
 
-__all__ = ["vis", "obb_vis"]
+__all__ = ["bbox_vis", "obb_vis", "mask_vis"]
 
 
-def vis(img, boxes, scores, cls_ids, conf=-1, class_names=None):
+def bbox_vis(img, boxes, scores, cls_ids, conf=-1, class_names=None):
 
     for i in range(len(boxes)):
         box = boxes[i]
@@ -57,10 +58,47 @@ def obb_vis(img, rboxes, scores, cls_ids, conf=-1, class_names=None, enable_put_
         txt_color = (0, 0, 0) if np.mean(_COLORS[cls_id]) > 0.5 else (255, 255, 255)
         font = cv2.FONT_HERSHEY_SIMPLEX
         img = np.ascontiguousarray(img, dtype=np.int32)
-        txt_size = cv2.getTextSize(text, font, 0.4, 1)[0]
         cv2.polylines(img, [rbox], True, color, 2)
         if enable_put_text:
+            txt_size = cv2.getTextSize(text, font, 0.4, 1)[0]
             cv2.putText(img, text, (ctr_x, ctr_y + txt_size[1]), font, 0.4, txt_color, thickness=1)
+
+    return img
+
+def mask_vis(img, masks, scores, cls_ids, conf=-1, class_names=None, enable_put_text=False, enable_put_bbox=False):
+    if enable_put_text:
+        assert enable_put_bbox
+    for i in range(len(masks)):
+        # rbox = rboxes[i].astype(np.int32)
+        mask = masks[i].astype(np.uint8)
+        cls_id = int(cls_ids[i])
+        score = scores[i]
+        if score < conf:
+            continue
+        color = (_COLORS[cls_id] * 255).astype(np.uint8)
+        img = np.ascontiguousarray(img, dtype=np.int32)
+        img[mask > 0] = img[mask > 0] * 0.5 + color.reshape(1, 3) * 0.5
+        if enable_put_text:
+            if enable_put_bbox:
+                bbox = mask_find_bboxes(mask)
+                x0 = bbox[0]
+                y0 = bbox[1]
+                x1 = bbox[0] + bbox[2]
+                y1 = bbox[1] + bbox[3]
+                bbox = [bbox[0] + bbox[2] / 2, bbox[1] + bbox[3] / 2, bbox[2], bbox[3]]
+            cv2.rectangle(img, (x0, y0), (x1, y1), color.tolist(), 2)
+            text = '{}:{:.1f}%'.format(class_names[cls_id], score * 100)
+            txt_color = (0, 0, 0) if np.mean(_COLORS[cls_id]) > 0.5 else (255, 255, 255)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            txt_size = cv2.getTextSize(text, font, 0.4, 1)[0]
+            cv2.rectangle(
+                img,
+                (x0, y0 + 1),
+                (x0 + txt_size[0] + 1, y0 + int(1.5*txt_size[1])),
+                txt_color,
+                -1
+            )
+            cv2.putText(img, text, (x0, y0 + txt_size[1]), font, 0.4, txt_color, thickness=1)
 
     return img
 

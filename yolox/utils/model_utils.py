@@ -68,8 +68,8 @@ def fuse_model(model):
     from yolox.models.modules import Conv
     
     for m in model.modules():
-        if type(m) is Conv and hasattr(m, "bn"):
-            m.cv = fuse_conv_and_bn(m.cv, m.bn)  # update conv
+        if type(m) is Conv and hasattr(m, "bn") and not isinstance(m.bn, nn.Identity):
+            m.conv = fuse_conv_and_bn(m.conv, m.bn)  # update conv
             delattr(m, "bn")  # remove batchnorm
             m.forward = m.fuseforward  # update forward
     return model

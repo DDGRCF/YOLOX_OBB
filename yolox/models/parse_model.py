@@ -4,6 +4,7 @@ from copy import deepcopy
 from loguru import logger
 from .modules import *
 from yolox.utils import make_divisible
+from torchvision.models import *  
 
 def get_model(cfg='yoloxs.yaml', in_channel=3, num_classes=None, anchors=None, cfg_save_path=None):
     if isinstance(cfg, dict):
@@ -38,7 +39,9 @@ def parse_model(cfg_dict, ch):
         no = nc + 5
 
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
-    for i, (f, n, m, args) in enumerate(cfg_dict['backbone'] + cfg_dict['head'] + cfg_dict["detect"]):  # from, number, module, args
+    i = -1
+    for _, (f, n, m, args) in enumerate(cfg_dict['backbone'] + cfg_dict['head'] + cfg_dict["detect"]):  # from, number, module, args
+        i += 1
         m = eval(m) if isinstance(m, str) else m  # eval strings
         kwargs = {}
         for j, a in enumerate(args):
@@ -54,7 +57,7 @@ def parse_model(cfg_dict, ch):
                     pass
 
         n = n_ = max(round(n * gd), 1) if n > 1 else n  # depth gain
-        if m in [Conv, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, MixConv2d, Focus, CrossConv,
+        if m in [Conv, ConvN, GhostConv, Bottleneck, GhostBottleneck, SPP, SPPF, DWConv, MixConv2d, Focus, CrossConv,
                  BottleneckCSP, C3, C3TR, C3SPP, C3Ghost, PPM, InstConv, nn.Conv2d]:
             c1, c2 = ch[f], args[0]
             if c2 != no:  # if not output
@@ -76,6 +79,9 @@ def parse_model(cfg_dict, ch):
                     assert x == c2
         elif m is Coordinates:
             c2 = ch[f] + 2
+        elif m.__name__ in resnet.model_urls.keys():
+            layers, ch, save, i = load_resnet(m, i, f, n, layers, ch, save, *args, **kwargs)
+            continue
         elif issubclass(m, Detect):
             kwargs["num_classes"] = nc
             args.append([ch[x] for x in f])
@@ -98,3 +104,49 @@ def parse_model(cfg_dict, ch):
             ch = []
         ch.append(c2)
     return nn.Sequential(*layers), sorted(save)
+
+
+def load_resnet(resnet, index, f, n, layers, ch, save, *args, **kwargs):
+    '''
+        conv1 - bn1 - relu | 0
+        maxpool            | 1
+        layer1             | 2
+        layer2             | 3
+        layer3             | 4 
+        layer4             | 5
+        avgpool            | 6
+        fc                 | 7
+    '''
+
+    assert n == 1
+    layers_num = args[0] 
+    args = args[1:]
+    model = resnet(*args, **kwargs)
+    modules = nn.ModuleList()
+    ch = []
+    for _, c in model.named_children():
+        modules.append(c)
+    layer_slice = [(0, 3), (3, 4), (4, 5), 
+                   (5, 6), (6, 7), (7, 8), 
+                   (8, 9), (9, 10)][:layers_num]
+    modules = [nn.Sequential(*modules[s[0]:s[1]]) for s in layer_slice]
+    input = torch.rand((1, 3, 512, 512))
+    if index == 0:
+        ch = []
+    for x in modules:
+        input = x(input)
+        ch.append(input.size()[1])
+    fs = [-1] * len(ch)
+    for i_, m_ in enumerate(modules):
+        i = index + i_
+        t = str(m_.__class__)[8:-2].replace('__main__.', '')
+        np = sum(x.numel() for x in m_.parameters())  # number params
+        m_.i, m_.f, m_.type, m_.np = i, fs[i_], t, np  # attach index, 'from' index, type, number params
+        save.extend(x % i for x in ([fs[i_]] if isinstance(fs[i_], int) else fs[i_]) if x != -1)  # append to savelist
+        layers.append(m_)
+    return layers, ch, save, i
+
+
+
+
+

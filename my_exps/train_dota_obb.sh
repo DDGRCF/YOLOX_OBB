@@ -1,6 +1,6 @@
 #! /bin/bash
 source ~/anaconda3/etc/profile.d/conda.sh
-env=yolox_obb 
+env=yolox_dect
 conda activate ${env}
 echo -e "\033[34m*******************************\033[0m"
 echo -e "\033[31mactivate env ${env}\033[0m"

@@ -156,6 +156,7 @@ class DOTAEvaluator:
         return data_list
 
     def evaluate_prediction(self, data_list, statistics, is_submiss=False, is_merge=True, **kwargs):
+        eval_stat = {"bbox": [0, 0]}
         if not is_main_process():
             return 0, 0, None
         logger.info("Evaluate in main process...")
@@ -183,7 +184,10 @@ class DOTAEvaluator:
                                                                  0.7, is_submiss, 
                                                                  is_merge, 
                                                                  eval_func=eval_arb_map, **kwargs) 
+        if mAPs is not None and mAP50 is not None:
+            eval_stat["bbox"] = [mAPs, mAP50]
+
         if mAPs is None or mAP50 is None:
-            return 0, 0, None
+            return eval_stat, None
         else:
-            return mAPs, mAP50, info
+            return eval_stat, info

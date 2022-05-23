@@ -7,6 +7,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import random
+import shutil 
 
 import os
 import cv2
@@ -127,7 +128,7 @@ def debug_mask_data(labels,
 
         txt_size = cv2.getTextSize(text, font, 0.4, 1)[0]
         cv2.rectangle(img, (x0, y0), (x1, y1), color, 2)
-        txt_bk_color = (_COLORS[cls_id] * 255 * 0.6).astype(np.uint8).tolist()
+        txt_bk_color = (_COLORS[cls_id] * 255 * 0.8).astype(np.uint8).tolist()
         if enable_txt:
             cv2.rectangle(
                 img,
@@ -551,7 +552,8 @@ class MosaicOBBDetection(Dataset):
                    origin_labels, 
                    extra_img,
                    extra_labels,
-                   choice_prob=1.):
+                   choice_prob=1.,
+                   overlaps_thre=0.4):
 
         cp_img = np.zeros(extra_img.shape, dtype=np.uint8)
         num_targets = len(extra_labels)
@@ -563,7 +565,7 @@ class MosaicOBBDetection(Dataset):
         keep_labels = []
         for cp_label in cp_labels:
             iof = bt.bbox_overlaps(origin_labels, cp_label[:-1][None], mode="iof") # TODO:TEST
-            if (iof < 0.5).all():
+            if (iof < overlaps_thre).all():
                 keep_labels.append(cp_label)
                 cv2.drawContours(
                     cp_img , [cp_label[:-1].reshape(-1, 1, 2).astype(np.int32)], 
@@ -700,7 +702,7 @@ class MosaicOBBDetection(Dataset):
 class MaskAugDataset(MaskDataset):
     def __init__(
         self, dataset, img_size, augmention=True, preproc=None,
-        degrees=10.0, translate=0.1, scale=(0.5, 1.5),
+        degrees=10.0, translate=0.1, scale=(0.8, 1.2),
         shear=2.0, mosaic_prob=1.0, 
         enable_debug=False, copy_paste_prob=0.0,
         *args, **kwargs
@@ -788,7 +790,7 @@ class MaskAugDataset(MaskDataset):
                     np.clip(mosaic_labels[:, 2], 0, 2 * input_w, out=mosaic_labels[:, 2])
                     np.clip(mosaic_labels[:, 3], 0, 2 * input_h, out=mosaic_labels[:, 3])
             else:
-                img, _labels, _, img_id, masks = self._dataset.pull_item(index)
+                img, _labels, _, img_id, masks = self._dataset.pull_item(idx)
                 h0, w0 = img.shape[:2]
                 scale = min(1. * input_h / h0, 1 * input_w / w0)
                 img = cv2.resize(
@@ -798,9 +800,10 @@ class MaskAugDataset(MaskDataset):
                 mosaic_img = np.full((input_h, input_w, c), 114, dtype=np.uint8)
                 mosaic_img[:h, :w, :] = img
                 num_targets = len(_labels)
-                masks = resize_mask(masks, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
                 mosaic_masks = np.full((input_h, input_w, num_targets), 0, dtype=np.uint8)
-                mosaic_masks [:h, :w] = masks
+                if num_targets:
+                    masks = resize_mask(masks.copy(), (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
+                    mosaic_masks[:h, :w] = masks
                 mosaic_labels = _labels.copy()
 
             mosaic_img, mosaic_labels, mosaic_masks = mask_random_affine(
@@ -823,11 +826,13 @@ class MaskAugDataset(MaskDataset):
                 mosaic_img, mosaic_labels, self.input_dim, mask_targets=mosaic_masks)
 
             if self.enable_debug and mosaic_labels.sum() > 0:
+                valid_masks = (mosaic_masks.sum((-2, -1)) > 0)
+                assert valid_masks.all(), f"{valid_masks}"
                 debug_mask_data(mosaic_labels.copy(), 
                            mosaic_img.copy(), 
                            mosaic_masks.copy(), 
                            class_names=self._dataset._classes, 
-                           save_name=index, 
+                           save_name=idx.item(), 
                            bbox_type='cxcywh')
 
             img_info = (mosaic_img.shape[1], mosaic_img.shape[0])

@@ -1,0 +1,48 @@
+# depth_multiple: 0.33  # model depth multiple
+# width_multiple: 0.50  # layer channel multiple
+depth_multiple: 1.0  # model depth multiple
+width_multiple: 1.0  # layer channel multiple
+
+# YOLOv5 backbone
+backbone:
+  # [from, number, module, args]
+  [
+    # conv1 - bn1 - relu | 0 / 2
+    # maxpool            | 1 / 4
+    # layer1             | 2 / 8
+    # layer2             | 3 / 16
+    # layer3             | 4 / 32
+    [-1, 1, resnet50, [5]], # Should Breeze Bn
+  ]
+
+# YOLOX_OBB head
+head:
+  [[-1, 1, ConvN, [256, 1, 1, "kwargs(init_func=caffe2_xavier_init)"]], # 5 / x
+   [-1, 1, PPM, [256, [1, 2, 3, 6]]], # 6
+   [-1, 1, ConvN, [256, 3, 1]], # 7 / x
+   [-1, 1, nn.Upsample, [None, 2, 'nearest']], # 8
+   [12, 1, nn.Upsample, [None, 4, 'nearest']], # 9
+
+   [3, 1, ConvN, [256, 1, 1, "kwargs(init_func=caffe2_xavier_init)"]], # 10 / x
+   [[-1, 8], 1, Sum, [1]],  # 11
+   [-1, 1, ConvN, [256, 3, 1, "kwargs(init_func=caffe2_xavier_init)"]], # 12 / x
+   [-1, 1, nn.Upsample, [None, 2, 'nearest']], # 13
+   [12, 1, nn.Upsample, [None, 2, 'nearest']], # 14
+
+   [2, 1, ConvN, [256, 1, 1, "kwargs(init_func=caffe2_xavier_init)"]], # 15 / x
+   [[-1, 13], 1, Sum, [1]],  # 16
+   [-1, 1, ConvN, [256, 3, 1, "kwargs(init_func=caffe2_xavier_init)"]], # 17 / x
+
+   [[-1, 14, 9], 1, Concat, [1]], # 18
+   [-1, 1, ConvN, [256, 3, 1, "kwargs(init_func=caffe2_msra_init)"]], # 19 / m fusion
+   # sparse decoder
+   # inst branch
+   [-1, 1, Coordinates, [absolute]], # 20
+   [-1, 1, InstConv, [256, 4, 3, 1, 1, "kwargs(init_func=caffe2_msra_init, act_func=nn.ReLU, inplace=True)"]], # 21 / m
+   # mask branch
+   [20, 1, InstConv, [256, 4, 3, 1, 1, "kwargs(init_func=caffe2_msra_init, act_func=nn.ReLU, inplace=True)"]], # 22 / m
+   [-1, 1, ConvN, [128, 1, 1]], # 23 / m
+  ]
+
+detect:
+  [[[-1, 21], 1, SparseInstDetect, []]] # Detect(P3, P4, P5)

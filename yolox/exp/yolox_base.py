@@ -291,5 +291,11 @@ class Exp(BaseExp):
             self.eval_interval = 1
             if not trainer_obj.no_aug:
                 trainer_obj.save_ckpt(ckpt_name="last_mosaic_epoch")
+    
+    def update_LR(self, lr_scheduler, optimizer, t_iter, c_iter, epoch):
+        lr = lr_scheduler.update_lr(t_iter + 1)
+        for param_group in optimizer.param_groups:
+            param_group["lr"] = lr
+        return lr
 
 

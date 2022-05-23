@@ -147,7 +147,7 @@ def mask_random_affine(
     target_size=(640, 640),
     degrees=10,
     translate=0.1,
-    scales=0.1,
+    scales=1.0,
     shear=10,
 ):
     M, scale = get_affine_matrix(target_size, degrees, translate, scales, shear)
@@ -157,7 +157,7 @@ def mask_random_affine(
     # Transform label coordinates
     if len(targets):
         targets = apply_affine_to_bboxes(targets, target_size, M, scale)
-        masks = cv2.warpAffine(masks, M, dsize=target_size, borderValue=0.)
+        masks = cv2.warpAffine(masks, M, dsize=target_size, borderValue=0)
         if masks.ndim == 2:
             masks = masks[..., None]
 
@@ -412,10 +412,15 @@ class ValTransform:
 
 
 class OBBTrainTransform:
-    def __init__(self, max_labels=100, flip_prob=0.5, hsv_prob=1.0):
+    def __init__(self, max_labels=100, flip_prob=0.5, 
+                 hsv_prob=1.0, long_wh_thre=10, 
+                 short_wh_thre=5, overlaps_thre=0.7):
         self.max_labels = max_labels
         self.flip_prob = flip_prob
         self.hsv_prob = hsv_prob
+        self.long_wh_thre=long_wh_thre
+        self.short_wh_thre=short_wh_thre
+        self.overlaps_thre=overlaps_thre 
 
     def __call__(self, image, targets, input_dim):
         last_axis = targets.shape[-1]
@@ -425,12 +430,6 @@ class OBBTrainTransform:
             targets = np.zeros((self.max_labels, last_axis), dtype=np.float32)
             image, _ = preproc(image, input_dim)
             return image, targets
-
-        # image_o = image.copy()
-        # targets_o = targets.copy()
-        # # height_o, width_o, _ = image_o.shape
-        # boxes_o = targets_o[:, :-1]
-        # labels_o = targets_o[:, -1]
 
         if random.random() < self.hsv_prob:
             augment_hsv(image)
@@ -458,11 +457,6 @@ class OBBTrainTransform:
         boxes_t = boxes[mask_b]
         labels_t = labels[mask_b]
 
-        # if len(boxes_t) == 0:
-        #     image_t, r_o = preproc(image_o, input_dim)
-        #     boxes_o[:, :4] = boxes_o[:, :4] * r_o
-        #     boxes_t = boxes_o
-        #     labels_t = labels_o
         if len(boxes_t) == 0:
             targets = np.zeros((self.max_labels, last_axis), dtype=np.float32)
             return image_t, targets
@@ -501,7 +495,7 @@ class ValTransform:
         self.legacy = legacy
 
     # assume input is cv2 img for now
-    def __call__(self, img, res, input_size):
+    def __call__(self, img, res, input_size, *args, **kwargs):
         img, _ = preproc(img, input_size, self.swap)
         if self.legacy:
             img = img[::-1, :, :].copy()
@@ -509,11 +503,13 @@ class ValTransform:
             img -= np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
             img /= np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
         return img, np.zeros((1, 6))
+
 class MaskTrainTransform:
-    def __init__(self, max_labels=50, flip_prob=0.5, hsv_prob=1.0, with_mask=False):
+    def __init__(self, max_labels=50, flip_prob=0.5, hsv_prob=1.0, wh_thre=8):
         self.max_labels = max_labels
         self.flip_prob = flip_prob
         self.hsv_prob = hsv_prob
+        self.wh_thre = wh_thre
 
     def _mask_filter(self, masks, keep_inds=None, is_tolist=False):
         if keep_inds is not None:
@@ -545,16 +541,14 @@ class MaskTrainTransform:
             augment_hsv(image)
 
         image_t, boxes, masks = _mask_mirror(image, boxes, self.flip_prob, masks=mask_targets)
-        # height, width, _ = image_t.shape
         image_t, r_ = preproc(image_t, input_dim)
-        # if self.with_mask:
-        #     mask_t = preproc(mask_t, input_dim, swap=None, padding_value=0.)[0]
 
-        # boxes [xyxy] 2 [cx,cy,w,h]
         boxes = xyxy2cxcywh(boxes)
         boxes *= r_
 
-        filter_b = np.minimum(boxes[:, 2], boxes[:, 3]) > 1
+        filter_b = np.minimum(boxes[:, 2], boxes[:, 3]) > self.wh_thre
+        filter_m = masks.sum((0, 1)) > self.wh_thre ** 2
+        filter_b = np.bitwise_and(filter_b, filter_m)
         boxes_t = boxes[filter_b]
         labels_t = labels[filter_b]
 
@@ -570,7 +564,6 @@ class MaskTrainTransform:
             masks = preproc(masks, (input_dim[0], input_dim[1], num_targets), None, 0.)[0]
             masks_t = self._mask_filter(masks, keep_inds, is_tolist=False)
 
-
         labels_t = np.expand_dims(labels_t, 1)
 
         targets_t = np.hstack((labels_t, boxes_t))
@@ -584,6 +577,7 @@ class MaskTrainTransform:
             masks_t = masks_t[..., :self.max_labels]
 
         padded_labels = np.ascontiguousarray(padded_labels, dtype=np.float32)
+        masks_t = (masks_t > 0).astype(np.float32)
 
         return (image_t, 
                 padded_labels, 

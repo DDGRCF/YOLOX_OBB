@@ -64,6 +64,10 @@ class BaseExp(metaclass=ABCMeta):
         pass
 
     @abstractmethod
+    def update_LR(self, lr_schedule, optimizer, t_iter, c_iter, epoch):
+        pass
+
+    @abstractmethod
     def eval(self, model, evaluator, weights):
         pass
 

@@ -314,7 +314,7 @@ class DOTADataset(Dataset):
     def single_image_merge(
         self,
         iters,
-        iou_thr=0.65,
+        iou_thr=0.1,
         is_merge_nms=True,
     ):
         result_per_image, xy_start_per_image, ori_id  = iters

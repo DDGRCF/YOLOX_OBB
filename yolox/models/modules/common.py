@@ -18,6 +18,54 @@ class Scale(torch.nn.Module):
     def forward(self, input):
         return self.scale * input
 
+class ConvN(nn.Module):
+    def __init__(
+        self, 
+        c1, 
+        c2, 
+        k=1, s=1, 
+        p=-1,g=1, 
+        b=True,
+        norm_func=None, 
+        act_func=None,
+        init_func=None,
+        inplace=False):
+        super().__init__()
+        if isinstance(p, int):
+            if p == -1:
+                p = autopad(k)
+            elif p < -1:
+                raise ValueError
+        else:
+            if p == None:
+                p = autopad(k)
+
+        self.conv = nn.Conv2d(
+            c1,
+            c2,
+            kernel_size=k,
+            stride=s,
+            padding=p,
+            groups=g,
+            bias=b)
+        self.bn = norm_func(c2) if norm_func is not None else nn.Identity()
+        self.act = act_func(inplace=inplace) if act_func is not None else nn.Identity() 
+        if init_func is not None:
+            init_func(self.conv)
+
+    def forward(self, x):
+        x = self.conv(x)
+        if self.bn == nn.LayerNorm:
+            x = x.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
+        x = self.bn(x)
+        x = self.act(x)
+        if self.bn == nn.LayerNorm:
+            x = x.permute(0, 3, 1, 2)
+        return x
+
+    def fuseforward(self, x):
+        return self.act(self.conv(x))
+
 class Conv(nn.Module):
     def __init__(
         self, 
@@ -40,7 +88,7 @@ class Conv(nn.Module):
             if p == None:
                 p = autopad(k)
 
-        self.cv = nn.Conv2d(
+        self.conv = nn.Conv2d(
             c1,
             c2,
             kernel_size=k,
@@ -51,10 +99,10 @@ class Conv(nn.Module):
         self.bn = norm_func(c2) if norm_func is not None else nn.Identity()
         self.act = act_func(inplace=inplace) if act_func is not None else nn.Identity() 
         if init_func is not None:
-            init_func(self.cv)
+            init_func(self.conv)
 
     def forward(self, x):
-        x = self.cv(x)
+        x = self.conv(x)
         if self.bn == nn.LayerNorm:
             x = x.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
         x = self.bn(x)
@@ -64,7 +112,7 @@ class Conv(nn.Module):
         return x
 
     def fuseforward(self, x):
-        return self.act(self.cv(x))
+        return self.act(self.conv(x))
 
 
 class DWConv(Conv):

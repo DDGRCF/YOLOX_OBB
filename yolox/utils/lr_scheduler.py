@@ -22,7 +22,7 @@ class LRScheduler:
         """
 
         self.lr = lr
-        self.iters_per_epoch = iters_per_epoch
+        self.iters_per_epoch = iters_per_epoch # 118287
         self.total_epochs = total_epochs
         self.total_iters = iters_per_epoch * total_epochs
 

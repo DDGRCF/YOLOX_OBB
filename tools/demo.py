@@ -33,7 +33,10 @@ def make_parser():
         action="store_true",
         help="whether to save the inference result of image/video",
     )
-
+    parser.add_argument(
+        "--output_format", 
+        nargs="+", choices=["bbox", "mask", "obb"], 
+        default="bbox")
     # exp file
     parser.add_argument(
         "-f",
@@ -91,6 +94,9 @@ def main(exp, args):
     else:
         exp.exp_name = args.experiment_name
 
+    if len(args.output_format) == 1:
+        args.output_format = args.output_format[0]
+
     file_name = os.path.join(exp.output_dir, args.experiment_name)
     os.makedirs(file_name, exist_ok=True)
 
@@ -124,7 +130,7 @@ def main(exp, args):
         # ckpt = torch.load(ckpt_file, map_location="cpu")
         ckpt = torch.load(ckpt_file, map_location=device)
         # load the model state dict
-        model.load_state_dict(ckpt["model"], strict=False)
+        model.load_state_dict(ckpt["model"], strict=True)
         logger.info("loaded checkpoint done.")
 
     if args.fuse:
@@ -152,7 +158,8 @@ def main(exp, args):
         getattr(model, "postprocess", postprocess),
         args.device, 
         args.fp16, 
-        args.legacy)
+        args.legacy,
+        output_format=args.output_format)
     current_time = time.localtime()
 
     if args.demo == "image":

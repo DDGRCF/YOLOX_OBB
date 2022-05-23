@@ -294,24 +294,27 @@ class Coordinates(nn.Module):
  
 class InstConv(nn.Module):
     # CSP Bottleneck with 3 convolutions
-    def __init__(self, c1, c2, n=1, k=[3], s=[1], p=[-1], a=[nn.ReLU], **kwargs):  # ch_in, ch_out, number, shortcut, groups, expansion
+    def __init__(self, c1, c2, n=1, k=[3], s=[1], p=[-1], b=[True], a=[nn.ReLU], norm_func=None, **kwargs):  # ch_in, ch_out, number, shortcut, groups, expansion
         super().__init__()
         self.convs = nn.ModuleList()
-        kwargs.pop("act_func", None)
         kwargs.pop("p", None)
         kwargs.pop("k", None)
         kwargs.pop("s", None)
+        kwargs.pop("b", None)
         kwargs.pop("norm_func", None)
+        kwargs.pop("act_func", None)
         a = [a] * n if not isinstance(a, list or tuple) else a
         s = [s] * n if not isinstance(s, list or tuple) else s
         k = [k] * n if not isinstance(k, list or tuple) else k
         p = [p] * n if not isinstance(p, list or tuple) else p
+        b = [b] * n if not isinstance(p, list or tuple) else b
         for i in range(n):
             a_i = a[i] if i < len(a) else None
-            s_i = s[i] if i < len(s) else None
-            k_i = k[i] if i < len(k) else None
-            p_i = p[i] if i < len(p) else None
-            self.convs.append(Conv(c1, c2, k=k_i, s=s_i, p=p_i, act_func=a_i, norm_func=None, **kwargs))
+            b_i = b[i] if i < len(b) else True
+            s_i = s[i] if i < len(s) else 1
+            k_i = k[i] if i < len(k) else 1
+            p_i = p[i] if i < len(p) else -1
+            self.convs.append(Conv(c1, c2, k=k_i, s=s_i, p=p_i, b=b_i, act_func=a_i, norm_func=norm_func, **kwargs))
             c1 = c2
 
     def forward(self, x):

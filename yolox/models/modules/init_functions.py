@@ -80,6 +80,16 @@ def caffe2_xavier_init(module, bias=0):
         bias=bias,
         distribution='uniform')
         
+# def caffe2_msra_init(module, bias=0):
+#     # `XavierFill` in Caffe2 corresponds to `kaiming_uniform_` in PyTorch
+#     # Acknowledgment to FAIR's internal code
+#     kaiming_init(
+#         module,
+#         a=0,
+#         mode='fan_out',
+#         nonlinearity='relu',
+#         bias=bias,
+#         distribution='uniform')
 def caffe2_msra_init(module, bias=0):
     # `XavierFill` in Caffe2 corresponds to `kaiming_uniform_` in PyTorch
     # Acknowledgment to FAIR's internal code
@@ -89,4 +99,4 @@ def caffe2_msra_init(module, bias=0):
         mode='fan_out',
         nonlinearity='relu',
         bias=bias,
-        distribution='uniform')
+        distribution='normal')

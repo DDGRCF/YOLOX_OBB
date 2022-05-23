@@ -9,6 +9,7 @@ from pycocotools.coco import maskUtils
 from ..dataloading import get_yolox_datadir
 from .datasets_wrapper import Dataset
 from .coco import COCODataset
+from ..data_augment import ValTransform
 
 
 class COCOInstanceDataset(COCODataset):
@@ -156,7 +157,13 @@ class COCOInstanceDataset(COCODataset):
         img, bbox_target, img_info, img_id, mask_target = self.pull_item(index)
 
         if self.preproc is not None:
-            img, bbox_target, mask_target = self.preproc(img, bbox_target, self.input_dim, mask_target)
+            if isinstance(self.preproc, ValTransform):
+                img, _ = self.preproc(img, bbox_target, self.input_dim, mask_target)
+                # mask_target = np.zeros((0, img.shape[0], img.shape[1]))
+                return img, bbox_target, img_info, img_id
+            else:
+                img, bbox_target, mask_target = self.preproc(img, bbox_target, self.input_dim, mask_target)
+
 
         return img, bbox_target, img_info, img_id, mask_target
 

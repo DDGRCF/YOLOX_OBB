@@ -7,6 +7,7 @@ import glob
 import os
 from os import path
 import torch
+import warnings
 from torch.utils.cpp_extension import (CppExtension, CUDAExtension)
 
 torch_ver = [int(x) for x in torch.__version__.split(".")[:2]]
@@ -83,12 +84,16 @@ def get_extensions():
                 'src/roi_align_rotated_ext.cpp'
             ],
             sources_cuda=['src/roi_align_rotated_cuda.cu']),
-        make_onnxruntime_ext(
-            name="ort_ext",
-            module="yolox.ops.onnxruntime",
-            with_cuda=False
-        )
     ]
+    if os.getenv("ONNXRUNTIME_DIR", "0") != "0":
+        warnings.warn("This Part is incompleted!")
+        ext_modules.append(
+            make_onnxruntime_ext(
+                name="ort_ext",
+                module="yolox.ops.onnxruntime",
+                with_cuda=False
+            )
+        )
 
     return ext_modules
 

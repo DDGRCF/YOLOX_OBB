@@ -1,10 +1,11 @@
 import torch
 import cv2
 import os
+import time
+import torch.nn.functional as F
 from yolox.data import ValTransform
 from loguru import logger
-from time import time
-from .visualize import obb_vis, vis
+from .visualize import obb_vis, bbox_vis, mask_vis
 
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
 
@@ -82,7 +83,9 @@ class Predictor(object):
         device="cpu",
         fp16=False,
         legacy=False,
+        output_format=["bbox"],
     ):
+        self.exp = exp
         self.model = model
         self.cls_names = exp.class_names
         self.decoder = decoder
@@ -92,6 +95,7 @@ class Predictor(object):
         self.device = device
         self.fp16 = fp16
         self.postprocess_cfg = exp.postprocess_cfg
+        self.output_format = output_format
         self.preproc = ValTransform(legacy=legacy)
         if trt_file is not None:
             from torch2trt import TRTModule
@@ -131,7 +135,7 @@ class Predictor(object):
         if device.type != img.device.type:
             img = img.to(device)
 
-        if device.type != self.model.device.type:
+        if device.type != next(iter(self.model.parameters())).device.type:
             model = model.to(device)
 
         if device.type == "cuda" and self.fp16:
@@ -148,9 +152,20 @@ class Predictor(object):
             )
             logger.info("Infer time: {:.4f}s".format(time.time() - t0))
 
-        return outputs
+        return outputs, img_info
 
     def visual(self, output, img_info):
+        if self.output_format == "obb":
+            return self.visual_obb(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.1))
+        elif self.output_format == "bbox":
+            return self.visual_bbox(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.1))
+        elif self.output_format == "mask":
+            return self.visual_mask(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.1))
+        elif isinstance(self.output_format, tuple or list):
+            raise NotImplementedError
+            
+
+    def visual_obb(self, output, img_info, vis_conf=0.1):
         ratio = img_info["ratio"]
         img = img_info["raw_img"]
         if output is None:
@@ -158,18 +173,67 @@ class Predictor(object):
         if isinstance(output, torch.Tensor):
             output = output.cpu().numpy()
 
-        if output.shape[-1] == 11:
-            bboxes = output[:, 0:8]
-            bboxes /= ratio
-            scores = output[:, 8] * output[:, 9]
-            cls = output[:, 10]
-            vis_res = obb_vis(img, bboxes, scores, cls, class_names=self.cls_names)
-        elif output.shape[-1] == 7:
-            bboxes = output[:, 0:4]
-            bboxes /= ratio
-            scores = output[:, 4] * output[:, 5]
-            cls = output[:, 6]
-            vis_res = vis(img, bboxes, scores, cls, class_names=self.cls_names)
+        bboxes = output[:, 0:8]
+        bboxes /= ratio
+        scores = output[:, 8] * output[:, 9]
+        cls = output[:, 10]
+        vis_res = obb_vis(img, bboxes, scores, cls, class_names=self.cls_names, conf=vis_conf)
+        return vis_res
+
+    def visual_bbox(self, output, img_info, vis_conf=0.1):
+        ratio = img_info["ratio"]
+        img = img_info["raw_img"]
+        if output is None:
+            return img
+        if isinstance(output, torch.Tensor):
+            output = output.cpu().numpy()
+
+        bboxes = output[:, 0:4]
+        bboxes /= ratio
+        scores = output[:, 4] * output[:, 5]
+        cls = output[:, 6]
+        vis_res = bbox_vis(img, bboxes, scores, cls, class_names=self.cls_names, conf=vis_conf)
 
         return vis_res
+    
+    
+    def visual_mask(self, output, img_info, vis_conf=0.1):
+        # ratio = img_info["ratio"]
+        img = img_info["raw_img"]
+        if output[0] is None or output[1] is None:
+            return img
+        masks = output[0]
+        output = output[1]
+        mask_dsize = (max(img.shape[:2]), ) * 2
+        if isinstance(output, torch.Tensor):
+            if masks.shape[1] != mask_dsize[0] or masks.shape[2] != mask_dsize[1]:
+                masks = F.interpolate(masks[:, None], size=mask_dsize, 
+                                    mode="bilinear", align_corners=False).squeeze(1)
+            masks = masks.cpu().numpy()
+            output = output.cpu().numpy()
+        else:
+            if masks.shape[1] != mask_dsize[0] or masks.shape[2] != mask_dsize[1]:
+                masks = cv2.resize(
+                    masks.transpose(1, 2, 0), dsize=mask_dsize, 
+                    interpolation=cv2.INTER_LINEAR
+                )
+                if masks.ndim == 2:
+                    masks = masks[None]
+                else:
+                    masks = masks.transpose(2, 0, 1)
+        masks = masks[:, :img.shape[0], :img.shape[1]]
+        clses = output[:, -1]
+        if output.shape[-1] == 3 and output.ndim == 2:
+            scores = output[:, 0] * output[:, 1]
+        elif output.shape[-1] == 2 and output.ndim == 2:
+            scores = output[:, 0]
+        else:
+            raise NotImplementedError
+        vis_res = mask_vis(img, masks, scores, clses, class_names=self.cls_names, conf=vis_conf)
+        return vis_res
+        
+
+
+        
+        
 

@@ -9,11 +9,11 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 
-from .base_exp import BaseExp
+from .yolox_base import Exp
 from loguru import logger
 
 
-class MaskExp(BaseExp):
+class MaskExp(Exp):
     def __init__(self):
         super().__init__()
         # ----------------config------------------------#
@@ -57,6 +57,7 @@ class MaskExp(BaseExp):
         self.print_interval = 10
         self.eval_interval = 10
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
+        self.wh_thre=8
 
         # -----------------  testing config ------------------ #
         self.enable_debug = False
@@ -107,7 +108,8 @@ class MaskExp(BaseExp):
                 preproc=MaskTrainTransform(
                     max_labels=50,
                     flip_prob=self.flip_prob,
-                    hsv_prob=self.hsv_prob),
+                    hsv_prob=self.hsv_prob, 
+                    wh_thre=self.wh_thre),
                 cache=cache_img)
 
         dataset = MaskAugDataset(
@@ -233,9 +235,9 @@ class MaskExp(BaseExp):
         return scheduler
 
     def get_eval_loader(self, batch_size, is_distributed, testdev=False, legacy=False):
-        from yolox.data import COCODataset, ValTransform
+        from yolox.data import COCOInstanceDataset, ValTransform
 
-        valdataset = COCODataset(
+        valdataset = COCOInstanceDataset(
             data_dir=self.data_dir,
             json_file=self.val_ann if not testdev else "image_info_test-dev2017.json",
             name="val2017" if not testdev else "test2017",
@@ -270,6 +272,10 @@ class MaskExp(BaseExp):
             img_size=self.test_size,
             num_classes=self.num_classes,
             testdev=testdev,
+            with_bbox=True,
+            with_mask=True,
+            metric = ["bbox", "segm"],
+            save_metric="bbox",
             **self.postprocess_cfg
         )
         return evaluator
@@ -279,17 +285,14 @@ class MaskExp(BaseExp):
 
     def train_before_epoch_deal(self, trainer_obj, *args, **kwargs):
         if trainer_obj.epoch + 1 == trainer_obj.max_epoch - self.no_aug_epochs or trainer_obj.no_aug:
-            logger.info("--->No mosaic aug now!")
-            # self.train_loader.close_mosaic()
-            trainer_obj.train_loader.set_sampler_property("mosaic", False)
-            logger.info("--->Add additional L1 loss now!")
-            if trainer_obj.is_distributed:
-                (trainer_obj.model.module).model[-1].use_extra_loss = True
-            else:
-                (trainer_obj.model).model[-1].use_extra_loss = True
+            logger.info("--->No data aug now!")
+            trainer_obj.train_loader.set_sampler_property("enable_augmention", False)
+            # if trainer_obj.is_distributed:
+            #     (trainer_obj.model.module).model[-1].use_extra_loss = True
+            # else:
+            #     (trainer_obj.model).model[-1].use_extra_loss = True
             # trainer_obj.exp.eval_interval = 1
             self.eval_interval = 1
             if not trainer_obj.no_aug:
                 trainer_obj.save_ckpt(ckpt_name="last_mosaic_epoch")
-
 

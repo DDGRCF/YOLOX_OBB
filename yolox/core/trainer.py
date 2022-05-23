@@ -114,9 +114,9 @@ class Trainer:
         if self.use_model_ema:
             self.ema_model.update(self.model)
 
-        lr = self.lr_scheduler.update_lr(self.progress_in_iter + 1)
-        for param_group in self.optimizer.param_groups:
-            param_group["lr"] = lr
+        lr = self.exp.update_LR(
+            self.lr_scheduler, self.optimizer, 
+            self.progress_in_iter+1, self.iter, self.epoch)
 
         iter_end_time = time.time()
         self.meter.update(
@@ -177,6 +177,7 @@ class Trainer:
             self.evaluator = self.exp.get_evaluator(
                 batch_size=self.args.batch_size, is_distributed=self.is_distributed
             )
+            self.save_metric = getattr(self.evaluator, "save_metric", "bbox")
         # Tensorboard logger
         if self.rank == 0:
             self.tblogger = SummaryWriter(self.file_name)
@@ -298,17 +299,31 @@ class Trainer:
             if is_parallel(evalmodel):
                 evalmodel = evalmodel.module
 
-        ap50_95, ap50, summary = self.exp.eval(
+        # ap50_95, ap50, summary = self.exp.eval(
+        #     evalmodel, self.evaluator, self.is_distributed
+        # )
+        # self.model.train()
+        # if self.rank == 0:
+        #     self.tblogger.add_scalar("val/COCOAP50", ap50, self.epoch + 1)
+        #     self.tblogger.add_scalar("val/COCOAP50_95", ap50_95, self.epoch + 1)
+        #     logger.info("\n" + summary)
+        # synchronize()
+        # self.save_ckpt("last_epoch", ap50_95 > self.best_ap)
+        # self.best_ap = max(self.best_ap, ap50_95)
+        eval_dict, summary = self.exp.eval(
             evalmodel, self.evaluator, self.is_distributed
         )
         self.model.train()
         if self.rank == 0:
-            self.tblogger.add_scalar("val/COCOAP50", ap50, self.epoch + 1)
-            self.tblogger.add_scalar("val/COCOAP50_95", ap50_95, self.epoch + 1)
+            for metric, eval_stat in eval_dict.items():
+                ap50, ap50_95 = eval_stat
+                self.tblogger.add_scalar(f"{metric}_val/COCOAP50", ap50, self.epoch + 1)
+                self.tblogger.add_scalar(f"{metric}_val/COCOAP50_95", ap50_95, self.epoch + 1)
             logger.info("\n" + summary)
         synchronize()
-        self.save_ckpt("last_epoch", ap50_95 > self.best_ap)
-        self.best_ap = max(self.best_ap, ap50_95)
+
+        self.save_ckpt("last_epoch", eval_dict[self.save_metric][1] > self.best_ap)
+        self.best_ap = max(self.best_ap, eval_dict[self.save_metric][1])
 
     def save_ckpt(self, ckpt_name, update_best_ckpt=False):
         if self.rank == 0:

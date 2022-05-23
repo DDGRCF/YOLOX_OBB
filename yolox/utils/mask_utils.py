@@ -7,12 +7,39 @@ import torch.nn.functional as F
 import pycocotools.mask as mask_util
 from ..ops import RoIAlign
 from typing import Any, Iterator, List, Union, Tuple
+from scipy.optimize import linear_sum_assignment
 
-def dice_score(inputs, targets):
-    inputs = inputs.sigmoid()
+def mask_find_bboxes(mask):
+    retval, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=8) # connectivity参数的默认值为8
+    stats = stats[stats[:,4].argsort()]
+    return stats[:-1]
+
+def linear_sum_assignment_with_inf(cost_matrix, *args, **kwargs):
+    cost_matrix = np.asarray(cost_matrix)
+    min_inf = np.isneginf(cost_matrix).any()
+    max_inf = np.isposinf(cost_matrix).any()
+    if min_inf and max_inf:
+        raise ValueError("matrix contains both inf and -inf")
+
+    if min_inf or max_inf:
+        values = cost_matrix[~np.isinf(cost_matrix)]
+        m = values.min()
+        M = values.max()
+        n = min(cost_matrix.shape)
+        # strictly positive constant even when added
+        # to elements of the cost matrix
+        positive = n * (M - m + np.abs(M) + np.abs(m) + 1)
+        if max_inf:
+            place_holder = (M + (n - 1) * (M - m)) + positive
+        if min_inf:
+            place_holder = (m + (n - 1) * (m - M)) - positive
+        cost_matrix[np.isinf(cost_matrix)] = place_holder
+    return linear_sum_assignment(cost_matrix, *args, **kwargs)
+
+def dice_score(inputs, targets, eps=1e-6):
     numerator = 2 * torch.matmul(inputs, targets.t())
     denominator = (inputs * inputs).sum(-1)[:, None] + (targets * targets).sum(-1)
-    score = numerator / (denominator + 1e-4)
+    score = numerator / (denominator + eps)
     return score
 
 def polygon_area(x, y):
@@ -181,7 +208,7 @@ def mask_overlaps(mask1, mask2,
         mask2 = mask2[None, :]
     inter_mask = (mask1 * mask2).sum((-1, -2)) # (num, h, w)
     if mode == "iou":
-        union_mask = (mask1 + mask2).sum((-1, -2)) - inter_mask # (num, h, w)
+        union_mask = ((mask1 + mask2).sum((-1, -2)) - inter_mask).clamp(min=0.) # (num, h, w)
     elif mode == "iof":
         union_mask = mask1.sum((-1, -2))
     return inter_mask / (union_mask + eps) # (n1, n2) or (n)

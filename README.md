@@ -65,28 +65,26 @@ This part please reference [BboxToolkit](./BboxToolkit/USAGE.md)
 ### **Demo**
 I prepare the shell the demo script so that you can quick run obb demo as :
 ```shell
-$ cd my_exps
-$ bash demo_dota_obb.sh [data_type] 0 /path/to/you
-# PS: 0 is to assign the train environment to 0 gpu, you can change it by youself and /path/to/you is your demo images. data_type can be selected in [dota1_0, dota2_0]
+$ expn=... && image_path=... && exp=... && ckpt=... && cuda=...
+$ bash my_exps/demo.sh ${expn} ${image_path} ${exp} ${ckpt} ${cuda}
 ```
  
 ### **Train**
 ```shell
-$ cd my_exps
-$ bash train_dota_obb.sh data_type 0
+$ expn=... && exp=... && ckpt=... && cuda=...
+$ bash my_exps/train.sh ${expn} ${exp} ${ckpt} ${cuda}
 ```
 ### **Test**
-Test contains eval online and generate submission file, they are all convenient.
-* for eval online
+#### **OBB**
+* eval online
 ```shell
-$ cd my_exps
-$ ./eval_dota_obb.sh [data_type] eval 0
-# PS: for convenience, I set default parameters. So, eval means evaluating DOTA val datasets.
+$ expn=... && exp=... && ckpt=... && cuda=...
+$ bash my_exps/eval.sh ${expn} ${exp} ${ckpt} ${cuda} 
 ```
-* for generate submission file
+* generate submission file for *obb*
 ```shell
-$ cd my_exps
-$ ./eval_dota_obb.sh [data_type] test 0
+$ expn=... && exp=... && ckpt=... && cuda=...
+$ bash my_exps/eval_obb.sh ${expn} ${exp} ${ckpt} ${cuda} 
 ```
 ## **Results**
 |Model | image size | mAP | epochs |

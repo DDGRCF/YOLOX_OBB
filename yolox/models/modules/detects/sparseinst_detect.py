@@ -270,6 +270,6 @@ class SparseInstDetect(Detect):
             bs_masks = F.interpolate(bs_masks[:, None], scale_factor=scale_factor, 
                                 mode="bilinear", align_corners=False).squeeze(1)
             bs_masks = (bs_masks > mask_thre).type(bs_scores.dtype)
-            outputs[i] = ((bs_masks, torch.stack((bs_scores, bs_labels), dim=-1)))
+            outputs[i] = (bs_masks, torch.stack((bs_scores, bs_labels), dim=-1))
         return outputs
 

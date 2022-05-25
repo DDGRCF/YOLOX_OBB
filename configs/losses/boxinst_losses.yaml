@@ -1,0 +1,29 @@
+Functions:
+  prj_loss: 
+    func: DiceLoss
+    args: [10, sum, sqrt]
+  obj_loss: 
+    func: CrossEntropyLoss
+    args: [1, sum, bce_use_sigmoid]
+  cls_loss: 
+    func: CrossEntropyLoss
+    args: [1, sum, bce_use_sigmoid]
+  reg_loss:
+    func: IoULoss
+    args: [5, sum, iou]
+  reg_loss_extra:
+    func: L1Loss
+    args: [1, sum, norm]
+Args:
+  prior_prob: 0.01
+  loss_pairwise_weight: 20.0
+  pairwise_warmup: 5000
+  pairwise_color_thresh: 0.3
+  pairwise_size: 3
+  pairwise_dilation: 2
+
+
+
+
+  
+  

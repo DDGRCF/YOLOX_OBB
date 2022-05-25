@@ -158,11 +158,14 @@ class Predictor(object):
         if self.output_format == "obb":
             return self.visual_obb(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.1))
         elif self.output_format == "bbox":
-            return self.visual_bbox(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.1))
+            return self.visual_bbox(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.3))
         elif self.output_format == "mask":
-            return self.visual_mask(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.1))
+            return self.visual_mask(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.3))
         elif isinstance(self.output_format, tuple or list):
-            raise NotImplementedError
+            if "bbox" in self.output_format and "mask" in self.output_format and len(self.output_format) == 2:
+                return self.visual_mask(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.3), with_bbox=True)
+            else:
+                raise NotImplementedError
             
 
     def visual_obb(self, output, img_info, vis_conf=0.1):
@@ -197,7 +200,7 @@ class Predictor(object):
         return vis_res
     
     
-    def visual_mask(self, output, img_info, vis_conf=0.1):
+    def visual_mask(self, output, img_info, vis_conf=0.1, with_bbox=False):
         # ratio = img_info["ratio"]
         img = img_info["raw_img"]
         if output[0] is None or output[1] is None:
@@ -225,15 +228,21 @@ class Predictor(object):
         clses = output[:, -1]
         if output.shape[-1] == 3 and output.ndim == 2:
             scores = output[:, 0] * output[:, 1]
+            bboxes = None
         elif output.shape[-1] == 2 and output.ndim == 2:
             scores = output[:, 0]
+            bboxes = None
+        elif output.shape[-1] == 7 and output.ndim == 2:
+            scores = output[:, 4] * output[:, 5] 
+            bboxes = output[:, :4]
+        elif output.shape[-1] == 6 and output.ndim == 2:
+            scores = output[:, 4]
+            bboxes = output[:, :4]
         else:
             raise NotImplementedError
-        vis_res = mask_vis(img, masks, scores, clses, class_names=self.cls_names, conf=vis_conf)
+        vis_res = mask_vis(img, masks, 
+                           scores, clses, 
+                           bboxes=bboxes,
+                           class_names=self.cls_names, 
+                           conf=vis_conf, enable_put_bbox=with_bbox)
         return vis_res
-        
-
-
-        
-        
-

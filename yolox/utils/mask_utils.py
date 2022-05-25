@@ -125,7 +125,7 @@ def aligned_bilinear(tensor, factor):
     tensor = F.interpolate(
         tensor, size=(oh, ow),
         mode='bilinear',
-        align_corners=True # TODO: test True or False
+        align_corners=False
     )
     tensor = F.pad(
         tensor, pad=(factor // 2, 0, factor // 2, 0),

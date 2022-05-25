@@ -287,11 +287,6 @@ class MaskExp(Exp):
         if trainer_obj.epoch + 1 == trainer_obj.max_epoch - self.no_aug_epochs or trainer_obj.no_aug:
             logger.info("--->No data aug now!")
             trainer_obj.train_loader.set_sampler_property("enable_augmention", False)
-            # if trainer_obj.is_distributed:
-            #     (trainer_obj.model.module).model[-1].use_extra_loss = True
-            # else:
-            #     (trainer_obj.model).model[-1].use_extra_loss = True
-            # trainer_obj.exp.eval_interval = 1
             self.eval_interval = 1
             if not trainer_obj.no_aug:
                 trainer_obj.save_ckpt(ckpt_name="last_mosaic_epoch")

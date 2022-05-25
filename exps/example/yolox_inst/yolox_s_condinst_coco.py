@@ -13,6 +13,8 @@ from yolox.exp import MaskExp as MyExp
 class Exp(MyExp):
     def __init__(self):
         super().__init__()
+        self.modules_config = "configs/modules/condinst_darknet.yaml"
+        self.losses_config = "configs/losses/condinst_losses.yaml"
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
         self.max_epoch = 36
         self.no_aug_epochs = 2
@@ -22,11 +24,14 @@ class Exp(MyExp):
         self.mosaic_prob = 0.0
         # copy paste data augmentation | default set 0.0 for fast train
         self.copy_paste_prob = 0.0
-        self.basic_lr_per_img = 2.5e-5 / 64.0
+        self.basic_lr_per_img = 5.0e-5 / 64.0
         self.weight_decay = 0.05
         self.postprocess_cfg = dict(
             conf_thre=0.05,
-            mask_thre=0.45,
+            mask_thre=0.50,
+            pre_nms_thre=0.45,
+            pre_nms_topk=1000,
+            post_nms_topk=100
         )
         # LR Scheduler
         self.scheduler = "multistep"
@@ -74,13 +79,21 @@ class Exp(MyExp):
             img_size=self.test_size,
             num_classes=self.num_classes,
             testdev=testdev,
-            with_bbox=False,
+            with_bbox=True,
             with_mask=True,
-            metric = ["segm"],
+            metric = ["bbox","segm"],
             save_metric="segm",
             **self.postprocess_cfg
         )
         return evaluator
+
+    def get_model(self):
+        from yolox.models import CondInstModel as Model
+        self.model = Model(self.modules_config, self.losses_config, in_channel=3, num_classes=self.num_classes)
+        self.model.initialize_weights()
+        assert len(self.class_names) == self.num_classes
+        assert self.model.num_classes == self.num_classes
+        return self.model
 
     def get_lr_scheduler(self, lr, iters_per_epoch):
         from yolox.utils import LRScheduler

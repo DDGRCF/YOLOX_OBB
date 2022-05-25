@@ -35,15 +35,14 @@ class OBBExp(Exp):
         self.translate = 0.1
         self.mosaic_scale = (0.4, 1.2)
         self.mixup_scale = (0.4, 1.2)
-        self.shear = 2
-        self.perspective = 0.0
-        self.enable_mixup = False
-        self.enable_copy_paste = False
+        self.shear = 2.
         self.enable_debug = False
         self.enable_resample = False
         self.aug_ignore = None
         self.empty_ignore=True
-
+        self.long_wh_thre=6
+        self.short_wh_thre=3
+        self.overlaps_thre=0.6
         # --------------  training config --------------------- #
         self.warmup_epochs = 1
         self.max_epoch = 80
@@ -113,15 +112,16 @@ class OBBExp(Exp):
             preproc=OBBTrainTransform(
                 max_labels=350,
                 flip_prob=self.flip_prob,
-                hsv_prob=self.hsv_prob),
+                hsv_prob=self.hsv_prob,
+                long_wh_thre=self.long_wh_thre,
+                short_wh_thre=self.short_wh_thre,
+                overlaps_thre=self.overlaps_thre),
+            overlaps_thre=self.overlaps_thre,
             degrees=self.degrees,
             translate=self.translate,
             mosaic_scale=self.mosaic_scale,
             mixup_scale=self.mixup_scale,
             shear=self.shear,
-            perspective=self.perspective,
-            enable_mixup=self.enable_mixup,
-            enable_copy_paste=self.enable_copy_paste,
             enable_resample=self.enable_resample,
             mosaic_prob=self.mosaic_prob,
             copy_paste_prob=self.copy_paste_prob,

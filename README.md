@@ -1,4 +1,4 @@
-**YOLOX OBB -- YOLOX 旋转框**
+**YOLOX OBB -- YOLOX 旋转框 | 实例分割**
 
 ![version](https://img.shields.io/badge/release_version-1.1.0-bule)
 ***
@@ -10,7 +10,8 @@
 ## **Introduction**
 
 ### Method
-  OBB -> PolyIoU Loss \ KLD Loss \ GWD Loss
+* **OBB** OBB -> PolyIoU Loss(OBBDetection) \ KLD Loss(NeurIPS2021) \ GWD Loss(ICML2021)
+* **Inst** Inst-> SparseInst(CVPR2022) \ CondInst(ECCV2020) \ BoxInst(CVPR2021)
 
 ## **Content**
 
@@ -92,6 +93,7 @@ $ ./eval_dota_obb.sh [data_type] test 0
 | ------        |:---:  |  :---: |  :---: |
 |[YOLOX_s_dota1_0](./exps/example/yolox_obb/yolox_s_dota1_0.py) |1024  | 70.82 | 80 |
 |[YOLOX_s_dota2_0](./exps/example/yolox_obb/yolox_s_dota2_0.py) |1024  | 49.52 | 80 |
+more results, wait...
 ## **Ralated&nbsp;Hub**
 
 - [YOLOX](https://github.com/Megvii-BaseDetection/YOLOX.git)

@@ -15,9 +15,10 @@ import random
 import cv2
 import numpy as np
 import shapely.geometry as shgeo
+import BboxToolkit as bt
 
 from yolox.utils import xyxy2cxcywh
-from BboxToolkit import poly2hbb
+# from BboxToolkit import poly2hbb
 
 
 def augment_hsv(img, hgain=5, sgain=30, vgain=30):
@@ -109,6 +110,21 @@ def apply_affine_to_bboxes(targets, target_size, M, scale):
 
     return targets
 
+def apply_affine_to_obboxes(targets, target_size, M, scale):
+    num_gts = len(targets)
+
+    # warp corner points
+    twidth, theight = target_size
+    targets_ = np.ones((4 * num_gts, 3))
+    targets_[:, :2] = targets[:, :8].reshape(
+        4 * num_gts, 2
+    )  # x1y1, x2y2, x1y2, x2y1
+    targets_ = targets_ @ M.T  # apply affine transform
+    targets_ = targets_.reshape(num_gts, 8)
+    targets[:, :8] = targets_
+
+    return targets
+
 def box_candidates(labels, high_limit_size, low_limit_size=(-1, -1), return_inds=False):
     assert labels.shape[-1] >= 8
     ctr_x = np.mean(labels[..., 0:8:2], axis=-1)
@@ -123,22 +139,18 @@ def box_candidates(labels, high_limit_size, low_limit_size=(-1, -1), return_inds
     else:
         return labels
 
-def box_ioa_filter(t_labels, o_labels, ioa_thre=0.30, eps=1e-6):
-    assert o_labels.ndim >= 2
-    if t_labels.ndim == 1:
-        t_labels = t_labels[None]
-    poly_t = t_labels[..., :8]
-    poly_o = o_labels[..., :8]
-    hbb_t = poly2hbb(poly_t).reshape(-1, 1, 2)
-    hbb_o = poly2hbb(poly_o).reshape(1, -1, 2)
-    lt = np.maximum(hbb_t[..., :2], hbb_o[..., :2])
-    rb = np.minimum(hbb_t[..., 2:], hbb_o[..., 2:])
-    wh = np.clip(rb - lt, 0, np.inf) # (#num_t, #num_o, 2)
-    overlaps = wh[..., 0] * wh[..., 1] # (#num_t, #num_o)
-    areas_t = (hbb_t[..., 2] - hbb_t[..., 0]) * (hbb_t[..., 3] - hbb_t[..., 1]) # (#num_t, 1)
-    keep_inds = np.nonzero(((overlaps / (areas_t + eps)) < ioa_thre).sum(1) == 0.0)[0]
-    return t_labels[keep_inds]
-
+def obox_candidates(obboxes, high_limit_size, low_limit_size=(-1, -1), overlaps_thre=0.6, return_inds=False):
+    image_obbox = np.asarray(
+        [[low_limit_size[1], low_limit_size[0], high_limit_size[1], high_limit_size[0]]], dtype=obboxes.dtype)
+    
+    overlaps = bt.bbox_overlaps(obboxes, image_obbox, mode="iof", is_aligned=False).squeeze(-1)
+    mask = overlaps > overlaps_thre
+    mask_inds = np.nonzero(mask)[0]
+    obboxes = obboxes[mask_inds]
+    if return_inds:
+        return obboxes, mask_inds
+    else:
+        return obboxes
 
 def mask_random_affine(
     img,
@@ -185,78 +197,17 @@ def random_affine(
 def obb_random_perspective(
     img,
     targets=(),
+    target_size=(640, 640),
     degrees=10,
     translate=0.1,
-    scale=0.1,
+    scales=0.1,
     shear=10,
-    perspective=0.0,
-    border=(0, 0),
 ):
-    # targets = [cls, xyxy]
-    height = img.shape[0] + border[0] * 2  # shape(h,w,c)
-    width = img.shape[1] + border[1] * 2
+    M, scale = get_affine_matrix(target_size, degrees, translate, scales, shear)
 
-    # Center
-    C = np.eye(3)
-    C[0, 2] = -img.shape[1] / 2  # x translation (pixels)
-    C[1, 2] = -img.shape[0] / 2  # y translation (pixels)
-
-    # Rotation and Scale
-    R = np.eye(3)
-    a = random.uniform(-degrees, degrees)
-    # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
-    s = random.uniform(scale[0], scale[1])
-    # s = 2 ** random.uniform(-scale, scale)
-    R[:2] = cv2.getRotationMatrix2D(angle=a, center=(0, 0), scale=s)
-
-    # Shear
-    S = np.eye(3)
-    S[0, 1] = math.tan(random.uniform(-shear, shear) * math.pi / 180)  # x shear (deg)
-    S[1, 0] = math.tan(random.uniform(-shear, shear) * math.pi / 180)  # y shear (deg)
-
-    # Translation
-    T = np.eye(3)
-    T[0, 2] = (
-        random.uniform(0.5 - translate, 0.5 + translate) * width
-    )  # x translation (pixels)
-    T[1, 2] = (
-        random.uniform(0.5 - translate, 0.5 + translate) * height
-    )  # y translation (pixels)
-
-    # Combined rotation matrix
-    M = T @ S @ R @ C  # order of operations (right to left) is IMPORTANT
-
-    ###########################
-    # For Aug out of Mosaic
-    # s = 1.
-    # M = np.eye(3)
-    ###########################
-
-    if (border[0] != 0) or (border[1] != 0) or (M != np.eye(3)).any():  # image changed
-        if perspective:
-            img = cv2.warpPerspective(
-                img, M, dsize=(width, height), borderValue=(114, 114, 114)
-            )
-        else:  # affine
-            img = cv2.warpAffine(
-                img, M[:2], dsize=(width, height), borderValue=(114, 114, 114)
-            )
-
-    # Transform label coordinates
-    n = len(targets)
-    if n:
-        # warp points
-        xy = np.ones((n * 4, 3))
-        xy[:, :2] = targets[:, :8].reshape(n * 4, 2) # for r bbox
-        xy = xy @ M.T  # transform
-        if perspective:
-            xy = (xy[:, :2] / xy[:, 2:3]).reshape(n, 8)  # rescale
-        else:  # affine
-            xy = xy[:, :2].reshape(n, 8)
-        # i = box_candidates(box1=targets[:, :8].T * s, box2=xy.T)
-        # targets = targets[i] 
-        # targets[:, :8] = xy[i]
-        targets[:, :8] = xy
+    img = cv2.warpAffine(img, M, dsize=target_size, borderValue=(114, 114, 114))
+    if len(targets) > 0:
+        targets = apply_affine_to_obboxes(targets, target_size, M, scale)
 
     return img, targets
 
@@ -283,24 +234,6 @@ def _mask_mirror(image, boxes, prob=0.5, masks=None):
             masks = masks[:, ::-1]
     return image, boxes, masks
 
-
-# def preproc(img, input_size, swap=(2, 0, 1)):
-#     if len(img.shape) == 3:
-#         padded_img = np.ones((input_size[0], input_size[1], 3), dtype=np.uint8) * 114
-#     else:
-#         padded_img = np.ones(input_size, dtype=np.uint8) * 114
-
-#     r = min(input_size[0] / img.shape[0], input_size[1] / img.shape[1])
-#     resized_img = cv2.resize(
-#         img,
-#         (int(img.shape[1] * r), int(img.shape[0] * r)),
-#         interpolation=cv2.INTER_LINEAR,
-#     ).astype(np.uint8)
-#     padded_img[: int(img.shape[0] * r), : int(img.shape[1] * r)] = resized_img
-
-#     padded_img = padded_img.transpose(swap)
-#     padded_img = np.ascontiguousarray(padded_img, dtype=np.float32)
-#     return padded_img, r
 
 def preproc(img, input_size, swap=(2, 0, 1), padding_value=114):
     if len(img.shape) == 3:
@@ -413,8 +346,8 @@ class ValTransform:
 
 class OBBTrainTransform:
     def __init__(self, max_labels=100, flip_prob=0.5, 
-                 hsv_prob=1.0, long_wh_thre=10, 
-                 short_wh_thre=5, overlaps_thre=0.7):
+                 hsv_prob=1.0, long_wh_thre=8, 
+                 short_wh_thre=3, overlaps_thre=0.6):
         self.max_labels = max_labels
         self.flip_prob = flip_prob
         self.hsv_prob = hsv_prob
@@ -438,21 +371,14 @@ class OBBTrainTransform:
         image_t, r_ = preproc(image_t, input_dim)
         boxes[:, :4] = boxes[:, :4] * r_
         # select box which's sides > 1 pixel
-        if last_axis == 5 or last_axis == 6:
-            _, height, width = image_t.shape
-            mask_b_wh = np.minimum(boxes[:, 2], boxes[:, 3]) > 1
-            mask_b_x = np.logical_and(0 < boxes[:, 0], boxes[:, 0] < width) 
-            mask_b_y = np.logical_and(0 < boxes[:, 1], boxes[:, 1] < height) 
-            mask_b = np.logical_and.reduce(np.array((mask_b_wh, mask_b_x, mask_b_y)))
-        elif last_axis == 9:
-            _, height, width = image_t.shape
-            side_l1 = np.sqrt((boxes[:, 0] - boxes[:, 2]) ** 2 + (boxes[:, 1] - boxes[:, 3]) ** 2)
-            side_l2 = np.sqrt((boxes[:, 2] - boxes[:, 4]) ** 2 + (boxes[:, 3] - boxes[:, 5]) ** 2)
-            b_ctrx, b_ctry = np.mean(boxes[:, 0:8:2], axis=1), np.mean(boxes[:, 1:8:2], axis=1)
-            mask_b_x = np.logical_and(0 < b_ctrx, b_ctrx < width)
-            mask_b_y = np.logical_and(0 < b_ctry, b_ctry < height)
-            mask_b_wh = np.minimum(side_l1, side_l2) > 1
-            mask_b = np.logical_and.reduce(np.array((mask_b_x, mask_b_y, mask_b_wh)))
+        _, height, width = image_t.shape
+        boxes_image_overlaps = bt.bbox_overlaps(boxes[:, :5], 
+                np.asarray([[width / 2, height / 2, width, height, 0]], dtype=boxes.dtype), 
+                mode="iof", is_aligned=False)
+        mask_b = boxes_image_overlaps.squeeze(-1) > self.overlaps_thre
+        mask_short_wh = np.minimum(boxes[:, 2], boxes[:, 3]) > self.short_wh_thre
+        mask_long_wh = np.maximum(boxes[:, 2], boxes[:, 3]) > self.long_wh_thre
+        mask_b = np.logical_and.reduce(np.array((mask_b, mask_short_wh, mask_long_wh)))
             
         boxes_t = boxes[mask_b]
         labels_t = labels[mask_b]

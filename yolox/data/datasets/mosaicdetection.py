@@ -17,7 +17,7 @@ import BboxToolkit as bt
 from yolox.utils import (adjust_box_anns, get_local_rank, 
                          mintheta_obb, obb2poly, poly2obb_np, bbox2type)
 from yolox.utils.mask_utils import resize_mask, mask_overlaps
-from ..data_augment import (box_candidates, random_affine, obb_random_perspective, mask_random_affine)
+from ..data_augment import (obox_candidates, random_affine, obb_random_perspective, mask_random_affine)
 from .datasets_wrapper import Dataset, MaskDataset
 from yolox.utils.visualize import _COLORS
 
@@ -385,42 +385,18 @@ class MosaicDetection(Dataset):
 
         return origin_img.astype(np.uint8), origin_labels
 
+
 class MosaicOBBDetection(Dataset):
     """Detection dataset wrapper that performs mixup for normal dataset."""
 
     def __init__(
         self, dataset, img_size, *args, mosaic=True, preproc=None,
         degrees=10.0, translate=0.1, mosaic_scale=(0.5, 1.5),
-        mixup_scale=(0.5, 1.5), shear=2.0, perspective=0.0,
-        enable_mixup=False, enable_copy_paste=False, 
+        mixup_scale=(0.5, 1.5), shear=2.0, overlaps_thre=0.6,
         enable_resample=False, mosaic_prob=1.0, mixup_prob=1.0, 
         copy_paste_prob=1.0, enable_debug=False, aug_ignore=None, 
         empty_ignore=True, **kwargs
     ):
-        """[summary]
-
-        Args:
-            dataset ([type]): [description]
-            img_size ([type]): [description]
-            mosaic (bool, optional): [description]. Defaults to True.
-            preproc ([type], optional): [description]. Defaults to None.
-            degrees (float, optional): [description]. Defaults to 10.0.
-            translate (float, optional): [description]. Defaults to 0.1.
-            mosaic_scale (tuple, optional): [description]. Defaults to (0.5, 1.5).
-            mixup_scale (tuple, optional): [description]. Defaults to (0.5, 1.5).
-            shear (float, optional): [description]. Defaults to 2.0.
-            perspective (float, optional): [description]. Defaults to 0.0.
-            enable_mixup (bool, optional): [description]. Defaults to False.
-            enable_copy_paste (bool, optional): [description]. Defaults to False.
-            enable_resample (bool, optional): [description]. Defaults to False.
-            mosaic_prob (float, optional): [description]. Defaults to 1.0.
-            mixup_prob (float, optional): [description]. Defaults to 1.0.
-            copy_paste_prob (float, optional): [description]. Defaults to 1.0.
-            enable_debug (bool, optional): [description]. Defaults to False.
-            aug_ignore ([type], optional): [description]. Defaults to None.
-            empty_ignore (bool, optional): [description]. Defaults to True.
-        """
-
         super().__init__(img_size, mosaic=mosaic)
         self._dataset = dataset
         self.preproc = preproc
@@ -428,11 +404,8 @@ class MosaicOBBDetection(Dataset):
         self.translate = translate
         self.scale = mosaic_scale
         self.shear = shear
-        self.perspective = perspective
         self.mixup_scale = mixup_scale
         self.enable_mosaic = mosaic
-        self.enable_mixup = enable_mixup
-        self.enable_copy_paste = enable_copy_paste
         self.mosaic_prob = mosaic_prob
         self.mixup_prob = mixup_prob
         self.copy_paste_prob = copy_paste_prob
@@ -440,6 +413,7 @@ class MosaicOBBDetection(Dataset):
         self.empty_ignore = empty_ignore
         self.enable_resample = enable_resample
         self.empty_ignore = empty_ignore
+        self.overlaps_thre = overlaps_thre
         self.aug_ignore_list = self._aug_ignore_convert(aug_ignore)
         self.local_rank = get_local_rank()
 
@@ -463,35 +437,49 @@ class MosaicOBBDetection(Dataset):
     
     @Dataset.wrapper_getitem
     def __getitem__(self, idx):
-        if self.enable_mosaic and random.random() < self.mosaic_prob:
+        if self.enable_mosaic:
             AUG_IGNORE_FLAG=False
             input_dim = self._dataset.input_dim
             input_h, input_w = input_dim[0], input_dim[1]
-            # yc, xc = s, s  # mosaic center x, y
-            # 3 additional image indices
-            indices = [idx] + [random.randint(0, len(self._dataset) - 1) for _ in range(3)]
-            mosaic_img, mosaic_labels, img_id = self._generate_mosaic_image(input_dim, indices)
-            while len(mosaic_labels) == 0 and self.empty_ignore:
-                mosaic_img, mosaic_labels, img_id = self._generate_mosaic_image(input_dim)
-            if self.aug_ignore_list is not None:
-                AUG_IGNORE_FLAG = len(np.intersect1d(self.aug_ignore_list, mosaic_labels[..., -1])) > 0.
+            if random.random() < self.mosaic_prob:
+                indices = [idx] + [random.randint(0, len(self._dataset) - 1) for _ in range(3)]
+                mosaic_img, mosaic_labels, img_id = self._generate_mosaic_image(input_dim, indices)
+                while len(mosaic_labels) == 0 and self.empty_ignore:
+                    mosaic_img, mosaic_labels, img_id = self._generate_mosaic_image(input_dim)
+                if self.aug_ignore_list is not None:
+                    AUG_IGNORE_FLAG = len(np.intersect1d(self.aug_ignore_list, mosaic_labels[..., -1])) > 0.
+            else:
+                img, _labels, _, img_id = self._dataset.pull_item(idx)
+                while len(_labels) == 0 and self.empty_ignore:
+                    idx = random.randint(0, self.__len__() - 1)
+                    img, _labels, _, img_id = self._dataset.pull_item(idx)
+                h0, w0 = img.shape[:2]
+                scale = min(1. * input_h / h0, 1. * input_w / w0)
+                img = cv2.resize(
+                    img, (int(w0 * scale), int(h0 * scale)), interpolation=cv2.INTER_LINEAR
+                )
+                labels = _labels.copy()
+                if _labels.size > 0:
+                    labels[:, 0] = scale * _labels[:, 0]
+                    labels[:, 1] = scale * _labels[:, 1]
+                    labels[:, 2] = scale * _labels[:, 2]
+                    labels[:, 3] = scale * _labels[:, 3]
+                mosaic_img = img
+                mosaic_labels = labels
+                if self.aug_ignore_list is not None:
+                    AUG_IGNORE_FLAG = len(np.intersect1d(self.aug_ignore_list, mosaic_labels[..., -1])) > 0.
 
             mosaic_img, mosaic_labels = obb_random_perspective(
                 mosaic_img,
                 mosaic_labels,
+                target_size=(input_w, input_h),
                 degrees=self.degrees if not AUG_IGNORE_FLAG else 0.,
                 translate=self.translate,
-                scale=self.scale,
+                scales=self.scale,
                 shear=self.shear if not AUG_IGNORE_FLAG else 0.,
-                perspective=self.perspective,
-                border=[-input_h // 2, -input_w // 2],
             ) 
-            # -----------------------------------------------------------------
-            # CopyPaste: https://arxiv.org/abs/2012.07177
-            # -----------------------------------------------------------------
             if (
-                self.enable_copy_paste
-                and not len(mosaic_labels) == 0
+                not len(mosaic_labels) == 0
                 and random.random() < self.copy_paste_prob
             ):
                 mosaic_img, mosaic_labels = self.extra_augmention(
@@ -499,8 +487,7 @@ class MosaicOBBDetection(Dataset):
                     resample=self.enable_resample, choice_prob=1.0)
 
             if (
-                self.enable_mixup
-                and not len(mosaic_labels) == 0
+                not len(mosaic_labels) == 0
                 and random.random() < self.mixup_prob
             ):
                 mosaic_img, mosaic_labels = self.extra_augmention(
@@ -517,7 +504,7 @@ class MosaicOBBDetection(Dataset):
             mix_img, padded_labels = self.preproc(mosaic_img, mosaic_labels, self.input_dim)
             img_info = (mix_img.shape[1], mix_img.shape[0])
             if self.enable_debug:
-                debug_obb_data(padded_labels, mix_img, str(idx.item()), 
+                debug_obb_data(padded_labels, mix_img, str(idx.item()) if isinstance(idx, np.ndarray) else str(idx), 
                 dir_name="DEBUG_IMAGES_VIS", save_dir=getattr(self, "work_dir", "./YOLOX_outputs"))
             return mix_img, padded_labels, img_info, img_id
 
@@ -564,7 +551,7 @@ class MosaicOBBDetection(Dataset):
         cp_labels = sample_labels.copy()
         keep_labels = []
         for cp_label in cp_labels:
-            iof = bt.bbox_overlaps(origin_labels, cp_label[:-1][None], mode="iof") # TODO:TEST
+            iof = bt.bbox_overlaps(origin_labels[:, :-1], cp_label[:-1][None], mode="iof", is_aligned=False)
             if (iof < overlaps_thre).all():
                 keep_labels.append(cp_label)
                 cv2.drawContours(
@@ -615,8 +602,9 @@ class MosaicOBBDetection(Dataset):
 
         if len(mosaic_labels) != 0:
             mosaic_labels = np.concatenate(mosaic_labels, 0)
-            mosaic_labels = box_candidates(mosaic_labels, 
-                    (2 * input_h, 2 * input_w), (0, 0))
+            _, valid_inds = obox_candidates(mosaic_labels[:, :8], 
+                    (2 * input_h, 2 * input_w), (0, 0), self.overlaps_thre, True)
+            mosaic_labels = mosaic_labels[valid_inds]
         return mosaic_img, mosaic_labels, img_id
         
     def extra_augmention(self, 
@@ -683,12 +671,11 @@ class MosaicOBBDetection(Dataset):
             cp_bboxes_transformed_np[:, 0::2] - x_offset
         cp_bboxes_transformed_np[:, 1::2] = \
             cp_bboxes_transformed_np[:, 1::2] - y_offset
-        cp_bboxes_transformed_np, cand_inds = box_candidates(cp_bboxes_transformed_np,
-            (target_h - 1, target_w - 1), (-1, -1), True)
+        cp_bboxes_transformed_np, cand_inds = obox_candidates(cp_bboxes_transformed_np,
+            (target_h - 1, target_w - 1), (-1, -1), self.overlaps_thre, True)
 
         if len(cp_bboxes_transformed_np) == 0:
             return origin_img, origin_labels
-        
         cls_labels = cp_labels[cand_inds][..., -1, None]
         box_labels = cp_bboxes_transformed_np
         labels = np.hstack((box_labels, cls_labels))
@@ -698,6 +685,7 @@ class MosaicOBBDetection(Dataset):
         elif aug_type == "copy_paste":
             return self.copy_paste(origin_img, origin_labels, 
                     padded_cropped_img, labels, **kwargs)
+
 
 class MaskAugDataset(MaskDataset):
     def __init__(

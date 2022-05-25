@@ -80,11 +80,18 @@ def parse_model(cfg_dict, ch):
         elif m is Coordinates:
             c2 = ch[f] + 2
         elif m.__name__ in resnet.model_urls.keys():
-            layers, ch, save, i = load_resnet(m, i, f, n, layers, ch, save, *args, **kwargs)
+            layers, ch, save, i =\
+                load_resnet(m, i, f, n, layers, ch, save, *args, **kwargs)
             continue
         elif issubclass(m, Detect):
             kwargs["num_classes"] = nc
             args.append([ch[x] for x in f])
+        elif m is CondInstMaskBranch:
+            c1 = [ch[x] for x in f]
+            ct = args[0]
+            ct = make_divisible(ct * gw, 8)
+            c2 = args[1]
+            args = [c1, ct, *args[1:]]
         elif m is Contract:
             c2 = ch[f] * args[0] ** 2
         elif m is Expand:

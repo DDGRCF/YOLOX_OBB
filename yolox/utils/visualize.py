@@ -65,7 +65,12 @@ def obb_vis(img, rboxes, scores, cls_ids, conf=-1, class_names=None, enable_put_
 
     return img
 
-def mask_vis(img, masks, scores, cls_ids, conf=-1, class_names=None, enable_put_text=False, enable_put_bbox=False):
+def mask_vis(img, masks, 
+             scores, cls_ids, 
+             bboxes=None, conf=-1, 
+             class_names=None, 
+             enable_put_text=False, 
+             enable_put_bbox=False):
     if enable_put_text:
         assert enable_put_bbox
     for i in range(len(masks)):
@@ -79,13 +84,15 @@ def mask_vis(img, masks, scores, cls_ids, conf=-1, class_names=None, enable_put_
         img = np.ascontiguousarray(img, dtype=np.int32)
         img[mask > 0] = img[mask > 0] * 0.5 + color.reshape(1, 3) * 0.5
         if enable_put_text:
-            if enable_put_bbox:
+            if enable_put_bbox and bboxes is None:
                 bbox = mask_find_bboxes(mask)
                 x0 = bbox[0]
                 y0 = bbox[1]
                 x1 = bbox[0] + bbox[2]
                 y1 = bbox[1] + bbox[3]
-                bbox = [bbox[0] + bbox[2] / 2, bbox[1] + bbox[3] / 2, bbox[2], bbox[3]]
+            else:
+                bbox = bboxes[i].astype(np.int32)
+                x0, y0, x1, y1 = bbox[0], bbox[1], bbox[2], bbox[3]
             cv2.rectangle(img, (x0, y0), (x1, y1), color.tolist(), 2)
             text = '{}:{:.1f}%'.format(class_names[cls_id], score * 100)
             txt_color = (0, 0, 0) if np.mean(_COLORS[cls_id]) > 0.5 else (255, 255, 255)

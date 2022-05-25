@@ -65,6 +65,7 @@ class IoULoss(nn.Module):
         self.return_iou = return_iou
 
     def forward(self, pred, target, avg_factor=1.):
+        # pred: xywh, xywh
         assert pred.shape[0] == target.shape[0], \
             f"expect {pred.shape} == {target.shape}"
         if pred.shape[0] == 0:

@@ -18,6 +18,7 @@ __all__ = [
     "adjust_box_anns",
     "xyxy2xywh",
     "xyxy2cxcywh",
+    "cxcywh2xyxy"
 ]
 
 
@@ -184,3 +185,8 @@ def xyxy2cxcywh(bboxes):
     bboxes[:, 0] = bboxes[:, 0] + bboxes[:, 2] * 0.5
     bboxes[:, 1] = bboxes[:, 1] + bboxes[:, 3] * 0.5
     return bboxes
+
+def cxcywh2xyxy(bboxes):
+    x1y1 = bboxes[..., 0:2] - bboxes[..., 2:4] / 2
+    x2y2 = bboxes[..., 0:2] + bboxes[..., 2:4] / 2
+    return torch.cat((x1y1, x2y2), dim=-1)

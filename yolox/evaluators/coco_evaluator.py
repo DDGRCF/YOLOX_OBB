@@ -256,11 +256,11 @@ class COCOEvaluator:
             if output is None or masks is None:
                 continue
 
-            masks = F.interpolate(masks[:, None], size=(self.img_size[0], self.img_size[1]), 
-                                  mode="bilinear", aligne_corners=False).squeeze(1)
+            if masks.shape[1] != self.img_size[0] or masks.shape[2] != self.img_size[1]: 
+                masks = F.interpolate(masks[:, None], size=(self.img_size[0], self.img_size[1]), 
+                                    mode="bilinear", aligne_corners=False).squeeze(1)
             masks = masks[:, img_h, img_w]
-            # output = output.cpu()
-            bboxes = output[:, 0:4]
+            bboxes = output[:, :4]
 
             # preprocessing: resize
             scale = min(
@@ -269,8 +269,11 @@ class COCOEvaluator:
             bboxes /= scale
             bboxes = xyxy2xywh(bboxes)
 
-            cls = output[:, 6].cpu().numpy()
-            scores = (output[:, 4] * output[:, 5]).cpu().numpy()
+            cls = output[:, -1].cpu().numpy()
+            if output.shape[-1] == 7:
+                scores = (output[:, 4] * output[:, 5]).cpu().numpy()
+            elif output.shape[-1] == 6:
+                scores = output[:, 4].cpu().numpy()
             masks = masks.cpu().numpy()
             for ind in range(bboxes.shape[0]):
                 label = self.dataloader.dataset.class_ids[int(cls[ind])]

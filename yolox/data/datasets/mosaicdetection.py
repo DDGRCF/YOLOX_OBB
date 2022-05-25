@@ -17,7 +17,7 @@ import BboxToolkit as bt
 from yolox.utils import (adjust_box_anns, get_local_rank, 
                          mintheta_obb, obb2poly, poly2obb_np, bbox2type)
 from yolox.utils.mask_utils import resize_mask, mask_overlaps
-from ..data_augment import (obox_candidates, random_affine, obb_random_perspective, mask_random_affine)
+from ..data_augment import (obox_candidates, random_affine, obb_random_affine, mask_random_affine)
 from .datasets_wrapper import Dataset, MaskDataset
 from yolox.utils.visualize import _COLORS
 
@@ -189,8 +189,8 @@ class MosaicDetection(Dataset):
     def __init__(
         self, dataset, img_size, mosaic=True, preproc=None,
         degrees=10.0, translate=0.1, mosaic_scale=(0.5, 1.5),
-        mixup_scale=(0.5, 1.5), shear=2.0, perspective=0.0,
-        enable_mixup=True, mosaic_prob=1.0, mixup_prob=1.0, 
+        mixup_scale=(0.5, 1.5), shear=2.0, enable_mixup=True, 
+        mosaic_prob=1.0, mixup_prob=1.0, 
         *args
     ):
         """
@@ -205,7 +205,6 @@ class MosaicDetection(Dataset):
             mosaic_scale (tuple):
             mixup_scale (tuple):
             shear (float):
-            perspective (float):
             enable_mixup (bool):
             *args(tuple) : Additional arguments for mixup random sampler.
         """
@@ -216,7 +215,6 @@ class MosaicDetection(Dataset):
         self.translate = translate
         self.scale = mosaic_scale
         self.shear = shear
-        self.perspective = perspective
         self.mixup_scale = mixup_scale
         self.enable_mosaic = mosaic
         self.enable_mixup = enable_mixup
@@ -469,7 +467,7 @@ class MosaicOBBDetection(Dataset):
                 if self.aug_ignore_list is not None:
                     AUG_IGNORE_FLAG = len(np.intersect1d(self.aug_ignore_list, mosaic_labels[..., -1])) > 0.
 
-            mosaic_img, mosaic_labels = obb_random_perspective(
+            mosaic_img, mosaic_labels = obb_random_affine(
                 mosaic_img,
                 mosaic_labels,
                 target_size=(input_w, input_h),

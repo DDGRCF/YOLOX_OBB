@@ -250,9 +250,11 @@ class COCOEvaluator:
 
     def convert_to_coco_format_bbox_mask(self, outputs, info_imgs, ids):
         data_list = []
-        for (masks, output, img_h, img_w, img_id) in zip(
-            *outputs, info_imgs[0], info_imgs[1], ids
+        for (output, img_h, img_w, img_id) in zip(
+            outputs, info_imgs[0], info_imgs[1], ids
         ):
+            masks = output[0]
+            output = output[1]
             if output is None or masks is None:
                 continue
 
@@ -292,62 +294,6 @@ class COCOEvaluator:
                 pred_data.update({"segmentation": seg})
                 data_list.append(pred_data)
         return data_list
-
-    # def evaluate_prediction(self, data_dict, statistics):
-    #     if not is_main_process():
-    #         return 0, 0, None
-
-    #     logger.info("Evaluate in main process...")
-
-    #     annType = ["segm", "bbox", "keypoints"]
-
-    #     inference_time = statistics[0].item()
-    #     nms_time = statistics[1].item()
-    #     n_samples = statistics[2].item()
-
-    #     a_infer_time = 1000 * inference_time / (n_samples * self.dataloader.batch_size)
-    #     a_nms_time = 1000 * nms_time / (n_samples * self.dataloader.batch_size)
-
-    #     time_info = ", ".join(
-    #         [
-    #             "Average {} time: {:.2f} ms".format(k, v)
-    #             for k, v in zip(
-    #                 ["forward", "NMS", "inference"],
-    #                 [a_infer_time, a_nms_time, (a_infer_time + a_nms_time)],
-    #             )
-    #         ]
-    #     )
-
-    #     info = time_info + "\n"
-
-    #     # Evaluate the Dt (detection) json comparing with the ground truth
-    #     if len(data_dict) > 0:
-    #         cocoGt = self.dataloader.dataset.coco
-    #         # TODO: since pycocotools can't process dict in py36, write data to json file.
-    #         if self.testdev:
-    #             json.dump(data_dict, open("./yolox_testdev_2017.json", "w"))
-    #             cocoDt = cocoGt.loadRes("./yolox_testdev_2017.json")
-    #         else:
-    #             _, tmp = tempfile.mkstemp()
-    #             json.dump(data_dict, open(tmp, "w"))
-    #             cocoDt = cocoGt.loadRes(tmp)
-    #         try:
-    #             from yolox.layers import COCOeval_opt as COCOeval
-    #         except ImportError:
-    #             from pycocotools.cocoeval import COCOeval
-
-    #             logger.warning("Use standard COCOeval.")
-
-    #         cocoEval = COCOeval(cocoGt, cocoDt, annType[1])
-    #         cocoEval.evaluate()
-    #         cocoEval.accumulate()
-    #         redirect_string = io.StringIO()
-    #         with contextlib.redirect_stdout(redirect_string):
-    #             cocoEval.summarize()
-    #         info += redirect_string.getvalue()
-    #         return cocoEval.stats[0], cocoEval.stats[1], info
-    #     else:
-    #         return 0, 0, info
 
     def evaluate_prediction(self, data_dict, statistics):
         eval_stat = {m: [0, 0] for m in self.metric}

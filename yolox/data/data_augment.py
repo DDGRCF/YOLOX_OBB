@@ -194,7 +194,7 @@ def random_affine(
 
     return img, targets
 
-def obb_random_perspective(
+def obb_random_affine(
     img,
     targets=(),
     target_size=(640, 640),

@@ -16,26 +16,26 @@ class Exp(MyExp):
         self.modules_config = "configs/modules/condinst_darknet.yaml"
         self.losses_config = "configs/losses/condinst_losses.yaml"
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
+
         self.max_epoch = 36
         self.no_aug_epochs = 2
+        self.warmup_epochs = 1
+        self.basic_lr_per_img = 0.01 / 64.0
+        self.min_lr_ratio = 0.05
+        self.weight_decay = 5e-4
+        self.momentum = 0.9
+        self.scheduler = "yoloxwarmcos"
+
         self.data_num_workers = 4
         self.no_eval = False
         # mosaic data augmentation | default set 0.0 for fast train
         self.mosaic_prob = 0.0
         # copy paste data augmentation | default set 0.0 for fast train
         self.copy_paste_prob = 0.0
-        self.basic_lr_per_img = 5.0e-5 / 64.0
-        self.weight_decay = 0.05
         self.postprocess_cfg = dict(
             conf_thre=0.05,
             mask_thre=0.50,
-            pre_nms_thre=0.45,
-            pre_nms_topk=1000,
-            post_nms_topk=100
         )
-        # LR Scheduler
-        self.scheduler = "multistep"
-        self.milestones = (210000, 250000)
         self.clip_norm_val = 0.0
         # Debug
         self.enable_debug = False
@@ -57,7 +57,7 @@ class Exp(MyExp):
                 elif hasattr(v, "weight") and isinstance(v.weight, nn.Parameter):
                     pg.append(v.weight)  # apply decay
 
-            optim = torch.optim.AdamW
+            optim = torch.optim.SGD
             clip_norm_val = self.clip_norm_val
             class FullModelGradientClippingOptimizer(optim):
                 def step(self, closure=None):
@@ -66,7 +66,7 @@ class Exp(MyExp):
                     super().step(closure=closure)
 
             self.optimizer = (FullModelGradientClippingOptimizer 
-                              if clip_norm_val > 0.0 else optim)(pg, lr=lr, amsgrad=False, weight_decay=self.weight_decay)
+                              if clip_norm_val > 0.0 else optim)(pg, lr=lr, momentum=self.momentum, weight_decay=self.weight_decay)
 
         return self.optimizer
 
@@ -103,6 +103,9 @@ class Exp(MyExp):
             lr,
             iters_per_epoch,
             self.max_epoch,
-            milestones=self.milestones,
+            warmup_epochs=self.warmup_epochs,
+            warmup_lr_start=self.warmup_lr,
+            no_aug_epochs=self.no_aug_epochs,
+            min_lr_ratio=self.min_lr_ratio,
         )
         return scheduler

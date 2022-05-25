@@ -2,6 +2,7 @@
 *~
 
 # user experiments directory
+my_exps/debug/
 /YOLOX_outputs/
 /datasets/*
 !/datasets/data_convert_tools/

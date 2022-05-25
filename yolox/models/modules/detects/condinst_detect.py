@@ -104,15 +104,15 @@ class CondInstDetectX(DetectX):
                 hsize, wsize = output.shape[-2:]
                 yv, xv = torch.meshgrid((torch.arange(hsize, device=device, dtype=dtype), torch.arange(wsize, device=device, dtype=dtype)))
                 grids.append(torch.stack((xv, yv), 2).view(hsize * wsize, 2))
-                strides.append(torch.full((hsize * wsize), self.strides[k], device=device, dtype=dtype))
-                levels.append(torch.full((hsize, wsize), k, device=device, dtype=dtype))
+                strides.append(torch.full((hsize * wsize, ), self.strides[k], device=device, dtype=dtype))
+                levels.append(torch.full((hsize * wsize, ), k, device=device, dtype=dtype))
             self.hw = [out.shape[-2:] for out in outputs]
             outputs = torch.cat([x.flatten(start_dim=2) for x in outputs], dim=2).permute(0, 2, 1)
             outputs = self.decode_outputs(outputs, dtype=xin[0].type())
             batch_size = outputs.shape[0]
-            grids = [torch.cat(grids, dim=1)] * batch_size
-            strides = [torch.cat(strides, dim=1)] * batch_size
-            levels = [torch.cat(levels, dim=1)] * batch_size
+            grids = [torch.cat(grids) for _ in range(batch_size)]
+            strides = [torch.cat(strides) for _ in range(batch_size)]
+            levels = [torch.cat(levels) for _ in range(batch_size)]
             # grids_ps = grids.expand(batch_size, -1, 2) * strides[..., None] + 0.5 * strides[..., None]
             x0y0 = outputs[:, :, 0:2] - outputs[:, :, 2:4] / 2
             x1y1 = outputs[:, :, 0:2] + outputs[:, :, 2:4] / 2
@@ -123,18 +123,18 @@ class CondInstDetectX(DetectX):
             for i, output in enumerate(outputs):
                 class_conf, class_pred = torch.max(output[:, self.reg_dim + 1: self.reg_dim + 1 +self.num_classes], 1, keepdim=True)
                 bboxes = output[:, :self.reg_dim]
-                obj_conf = output[: [self.reg_dim]]
+                obj_conf = output[:, [self.reg_dim]]
                 cnt_out = output[:, self.reg_dim + 1 + self.num_classes :]
-                img_ind = torch.full_like(class_conf, i, dim=-1)
+                img_ind = torch.full_like(class_conf, i)
                 detections  = torch.cat((bboxes, obj_conf, class_conf, class_pred.float()), 1)
                 keep_inds = multiclass_nms(bboxes, 
-                                          class_conf, 
-                                          class_pred, 
-                                          score_factors=obj_conf, 
+                                          class_conf.squeeze(-1), 
+                                          class_pred.squeeze(-1), 
+                                          score_factors=obj_conf.squeeze(-1), 
                                           iou_thr=self.bbox_iou_thre,
                                           score_thr=self.bbox_nms_topk, 
                                           class_agnostic=False)
-                outputs[i] = detections[keep_inds]
+                outputs_[i] = detections[keep_inds]
                 img_inds[i] = img_ind[keep_inds]
                 cnt_outs[i] = cnt_out[keep_inds]
                 grids[i] = grids[i][keep_inds]
@@ -147,13 +147,19 @@ class CondInstDetectX(DetectX):
             levels = torch.cat(levels, dim=0)
             strides = torch.cat(strides, dim=0)
             grids_ps = grids * strides[..., None] + 0.5 * strides[..., None]
-            mask_logits = self.mask_heads_forward_with_coords(
-                mask_feats, cnt_outs, img_inds, grids_ps, levels, 
-                self.size_of_interest, self.mask_feat_stride, 1
-            )
-            mask_scores = mask_logits.sigmoid()
-            mask_scores = [mask_scores[n * self.bbox_nms_topk: (n + 1) * self.bbox_nms_topk] for n in range(batch_size)]
-            return mask_scores, outputs # (bs * n, 640, 640)
+            if len(cnt_outs) > 0:
+                mask_logits = self.mask_heads_forward_with_coords(
+                    mask_feats, cnt_outs, img_inds, grids_ps, levels, 
+                    self.size_of_interest, self.mask_feat_stride, 1
+                )
+                mask_scores = mask_logits.sigmoid()
+                mask_scores = [mask_scores[img_inds==i] for i in range(batch_size)]
+                return mask_scores, outputs # (bs * n, 640, 640)
+            else:
+                return [cnt_outs.new_empty((0, 
+                        mask_feats.shape[-2] * self.mask_feat_stride, 
+                        mask_feats.shape[-1] * self.mask_feat_stride)) for _ in range(batch_size)], \
+                    outputs.new_empty((batch_size, 0, self.reg_dim + 2))
 
     def get_losses(self, targets, inps):
         imgs = inps[-1]
@@ -598,7 +604,7 @@ class CondInstDetectX(DetectX):
     @staticmethod
     def postprocess(inputs, num_classes=80, conf_thre=0.1, 
                     mask_thre=0.50, scale_factor=4, eps=1e-6, **kwargs):
-        outputs = [(None, None) for _ in range(inputs[0].shape[0])]
+        outputs = [(None, None) for _ in range(len(inputs[0]))]
         for i, (bs_masks, bs_bboxes) in enumerate(zip(inputs[0], inputs[1])):
             bs_scores = bs_bboxes[:, 4] * bs_bboxes[:, 5]
             bs_labels = bs_bboxes[:, -1]

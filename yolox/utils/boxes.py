@@ -59,9 +59,9 @@ def postprocess(prediction, num_classes, conf_thre=0.7, nms_thre=0.45, class_agn
         detections = torch.cat((bboxes, obj_conf, class_conf, class_pred.float()), 1)
         # detections = detections[conf_mask]
         mask_nms = multiclass_nms(bboxes, 
-                                  class_conf, 
-                                  class_pred, 
-                                  score_factors=obj_conf, 
+                                  class_conf.squeeze(-1), 
+                                  class_pred.squeeze(-1), 
+                                  score_factors=obj_conf.squeeze(-1), 
                                   iou_thr=nms_thre,
                                   score_thr=conf_thre,
                                   class_agnostic=class_agnostic,

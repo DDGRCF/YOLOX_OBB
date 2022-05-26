@@ -158,7 +158,7 @@ class COCOInstanceDataset(COCODataset):
 
         if self.preproc is not None:
             if isinstance(self.preproc, ValTransform):
-                img, _ = self.preproc(img, bbox_target, self.input_dim, mask_target)
+                img, bbox_target = self.preproc(img, bbox_target, self.input_dim, mask_target)
                 # mask_target = np.zeros((0, img.shape[0], img.shape[1]))
                 return img, bbox_target, img_info, img_id
             else:

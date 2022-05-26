@@ -14,7 +14,7 @@ class Exp(MyExp):
     def __init__(self):
         super().__init__()
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
-        self.max_epoch = 36
+        self.max_epoch = 12
         self.no_aug_epochs = 2
         self.data_num_workers = 4
         self.no_eval = False
@@ -22,16 +22,17 @@ class Exp(MyExp):
         self.mosaic_prob = 0.0
         # copy paste data augmentation | default set 0.0 for fast train
         self.copy_paste_prob = 0.0
-        self.basic_lr_per_img = 2.5e-5 / 64.0
+        self.basic_lr_per_img = 4.0e-5 / 64.0
         self.weight_decay = 0.05
         self.postprocess_cfg = dict(
-            conf_thre=0.05,
+            conf_thre=0.01,
             mask_thre=0.45,
         )
         # LR Scheduler
         self.scheduler = "multistep"
-        self.milestones = (210000, 250000)
+        self.milestones_epoch_step = (7, 10)
         self.clip_norm_val = 0.0
+        self.eval_interval = 3
         # Debug
         self.enable_debug = False
         self._get_data_info(self.dataset_config)
@@ -84,6 +85,11 @@ class Exp(MyExp):
 
     def get_lr_scheduler(self, lr, iters_per_epoch):
         from yolox.utils import LRScheduler
+        if not hasattr(self, "milestones"):
+            assert hasattr(self, "milestones_epoch_step")
+            self.milestones = []
+            for step_epoch in self.milestones_epoch_step:
+                self.milestones.append(step_epoch * iters_per_epoch)
 
         scheduler = LRScheduler(
             self.scheduler,

@@ -225,12 +225,12 @@ class COCOEvaluator:
             if masks.shape[1] != self.img_size[0] or masks.shape[2] != self.img_size[1]:
                 masks = F.interpolate(masks[:, None], size=(self.img_size[0], self.img_size[1]), 
                                     mode="bilinear", aligne_corners=False).squeeze(1)
-            masks = (masks > 0).type(torch.uint8)
+            masks = (masks > 0)
             masks = masks[:, :img_h, :img_w] 
             clses = clses.cpu().numpy()
             scores = scores.cpu().numpy()
             masks = masks.cpu().numpy()
-            for ind in range(len(masks)):
+            for ind in range(len(scores)):
                 label = self.dataloader.dataset.class_ids[int(clses[ind])]
                 pred_data = {
                     "image_id": int(img_id),
@@ -240,8 +240,8 @@ class COCOEvaluator:
                     "segmentation": []
                 }
                 seg = coco_mask_utils.encode(
-                    np.asarray(masks[..., ind, None], order="F", dtype=np.uint8)
-                )[0]
+                    np.asarray(masks[ind], order="F", dtype=np.uint8)
+                )
                 if isinstance(seg["counts"], bytes):
                     seg["counts"] = seg["counts"].decode()
                 pred_data.update({"segmentation": seg})
@@ -287,7 +287,7 @@ class COCOEvaluator:
                     "segmentation": [],
                 }  # COCO json format
                 seg = coco_mask_utils.encode(
-                    np.asarray(masks[..., ind, None], order="F", dtype=np.uint8)
+                    np.asarray(masks[ind], order="F", dtype=np.uint8)
                 )[0]
                 if isinstance(seg["counts"], bytes):
                     seg["counts"] = seg["counts"].decode()
@@ -348,7 +348,6 @@ class COCOEvaluator:
                     cocoEval.summarize()
                 eval_stat[metric] = [cocoEval.stats[0], cocoEval.stats[1]]
                 info += redirect_string.getvalue()
-
             return eval_stat, info
         else:
             return eval_stat, info

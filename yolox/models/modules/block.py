@@ -303,11 +303,11 @@ class InstConv(nn.Module):
         kwargs.pop("b", None)
         kwargs.pop("norm_func", None)
         kwargs.pop("act_func", None)
-        a = [a] * n if not isinstance(a, list or tuple) else a
-        s = [s] * n if not isinstance(s, list or tuple) else s
-        k = [k] * n if not isinstance(k, list or tuple) else k
-        p = [p] * n if not isinstance(p, list or tuple) else p
-        b = [b] * n if not isinstance(p, list or tuple) else b
+        a = [a] * n if not isinstance(a, (list, tuple)) else a
+        s = [s] * n if not isinstance(s, (list, tuple)) else s
+        k = [k] * n if not isinstance(k, (list, tuple)) else k
+        p = [p] * n if not isinstance(p, (list, tuple)) else p
+        b = [b] * n if not isinstance(p, (list, tuple)) else b
         for i in range(n):
             a_i = a[i] if i < len(a) else None
             b_i = b[i] if i < len(b) else True

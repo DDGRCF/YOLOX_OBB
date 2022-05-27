@@ -36,6 +36,7 @@ class Exp(MyExp):
             conf_thre=0.05,
             mask_thre=0.50,
         )
+        self.eval_interval = 5
         self.clip_norm_val = 0.0
         # Debug
         self.enable_debug = False

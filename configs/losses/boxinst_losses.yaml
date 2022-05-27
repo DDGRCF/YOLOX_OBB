@@ -17,7 +17,7 @@ Functions:
 Args:
   loss_pairwise_weight: 1.0
   prior_prob: 0.01
-  bbox_iou_thre: 0.65 
+  bbox_iou_thre: 0.50
   bbox_nms_topk: 1000
   pairwise_warmup: 5000
   pairwise_color_thresh: 0.3

@@ -19,5 +19,4 @@ from .file_utils import *
 from .anchor_utils import *
 from .argparse_utils import *
 from .predictor_utils import *
-from .depoly_utils import *
 from .mask_utils import *

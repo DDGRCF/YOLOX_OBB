@@ -38,6 +38,6 @@ if [ -d ${work_dir} ]; then
 fi
 sleep 2s
 
-CUDA_VISIBLE_DEVICES=${cuda} python tools/train.py -expn ${expn} -f ${config} -d 1 -b 8 --cache --fp16 -c ${ckpt}
+CUDA_VISIBLE_DEVICES=${cuda} python tools/train.py -expn ${expn} -f ${config} -d 1 -b 4 --cache --fp16 -c ${ckpt}
 cd -
 

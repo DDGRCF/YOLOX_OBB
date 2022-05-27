@@ -1,17 +1,13 @@
 import os
+import cv2
+import onnx
 import torch
 import argparse
-import torch.onnx
-import torch.nn as nn
-import cv2
 import numpy as np
-from functools import partial
-from yolox.utils import Predictor
-from yolox.exp import get_exp
-from yolox.utils import replace_module, DictAction, obbpostprocess, postprocess
-from yolox.utils import DepolyModel
-# from yolox.models.network_blocks import SiLU
+import copy
 from loguru import logger
+from yolox.exp import get_exp
+from yolox.utils import DictAction
 
 def make_parser():
     parser = argparse.ArgumentParser()
@@ -58,30 +54,42 @@ def main():
 
     exp = get_exp(args.exp_file, args.name)
     exp.merge(args.options)
-    exp.is_export_onnx = True
+    model_input_names = getattr(exp, "export_input_names", "input")
+    model_output_names = getattr(exp, "export_output_names", "output") 
+    dynamic_axes = getattr(exp, "export_dynamic_axes", None)
+    if not isinstance(model_input_names, (tuple, list)):
+        model_input_names = [model_input_names]
+    if not isinstance(model_input_names, (tuple, list)):
+        model_output_names = [model_output_names]
 
     if not args.experiment_name:
         args.experiment_name = exp.exp_name
     
     if args.ckpt is None:
         file_name = os.path.join(exp.output_dir, args.experiment_name)
-        ckpt_file = os.path.join(file_name, "best_ckpt.pth")
+        ckpt_file_best = os.path.join(file_name, "best_ckpt.pth")
+        ckpt_file_last = os.path.join(file_name, "lastest_ckpt.pth")
+        if os.path.exists(ckpt_file_best):
+            ckpt_file = ckpt_file_best
+        elif os.path.exits(ckpt_file_last):
+            ckpt_file = ckpt_file_last
+        else:
+            raise ValueError
     else:
         ckpt_file = args.ckpt
+    dst_dir = os.path.dirname(ckpt_file)
 
     device = torch.device(args.device)
     model = exp.get_model()
-    # model = replace_module(model, nn.SiLU, SiLU)
-    model.to(device)
-    ckpt = torch.load(ckpt_file, map_location=device)
-    # predictor = Predictor(model, exp, postprocess_func=getattr(model, "postprocess", postprocess), fp16=False, device=device)
-    # predictor.inference = partial(predictor.inference, return_img_info=False)
-
-    model.eval()
+    ckpt = torch.load(ckpt_file, map_location="cpu")
     if "model" in ckpt:
         ckpt = ckpt["model"]
-    model.load_state_dict(ckpt)
+    model.load_state_dict(ckpt, strict=True)
     logger.info("loading checkpoint done.")
+    deploy_model = exp.model_wrapper(model)
+    deploy_model.float()
+    deploy_model.eval()
+    deploy_model.to(device)
     # input 
     logger.info("begin convert model to torchscript...")
     inference_image_ = cv2.imread(args.inference_image)
@@ -89,7 +97,7 @@ def main():
     inference_image = np.zeros((*(exp.test_size), c), dtype=np.uint8)
     ratio = min(exp.test_size[0] / i_h, exp.test_size[1] / i_w)
     inference_image_ = cv2.resize(inference_image_, (int(i_w * ratio), int(i_h * ratio)))
-    inference_image[:i_h, :i_w, :] = inference_image_
+    inference_image[:inference_image_.shape[0], :inference_image_.shape[1] :] = inference_image_
     # dummy_input = (torch.from_numpy(inference_image) / 255).permute(2, 0, 1)[None]
     # dummy_input = np.transpose(inference_image_ / 255.0, (2, 0, 1))
     dummy_input = np.transpose(inference_image, (2, 0, 1))
@@ -98,43 +106,37 @@ def main():
     dummy_input = torch.from_numpy(dummy_input)[None].to(device).float()
     # dummy_input = torch.rand(1, 3, *(exp.test_size)).to(device)
     # dummy_input = torch.rand(1, 3, 640, 640).to(device)
-    depoly_model= DepolyModel(model, exp, max_num=100)
     with torch.jit.optimized_execution(True):
-        model_torchscript = torch.jit.trace(depoly_model, dummy_input)
-    print(model_torchscript.graph)
+        model_torchscript = torch.jit.trace(deploy_model, dummy_input)
     logger.info("torchscript convert done") 
     # if args.out_type == "torchscript" or args.out_type == "onnx" or args.out_type == "tensorrt":
     if args.out_type == "torchscript":
-        torchscript_output_path = os.path.join(exp.output_dir, args.output_name + ".pt")
+        torchscript_output_path = os.path.join(dst_dir, args.output_name + ".pt")
         model_torchscript.save(torchscript_output_path)
         logger.info("generated torchsciopt model named {}".format(args.output_name))
     if args.out_type == "onnx" or args.out_type == "tensorrt":
-        onnx_output_path = os.path.join(exp.output_dir, args.output_name + ".onnx")
-        input_names = ["input"]
-        output_names = ["output"]
-        logger.info("onnx model input name is {}".format(input_names))
-        logger.info("onnx model output name is {}".format(output_names))
+        onnx_output_path = os.path.join(dst_dir, args.output_name + ".onnx")
+        logger.info("onnx model input name is {}".format(model_input_names))
+        logger.info("onnx model output name is {}".format(model_output_names))
 
         # generate example output
         dummy_output = model_torchscript(dummy_input)
 
-        # for condinst and boxinst don't support dynamic axes
         logger.info("begin convert onnx model...")
-        torch.onnx.export(model_torchscript,
+        torch.onnx.export(copy.deepcopy(model_torchscript),
                         dummy_input,
                         onnx_output_path,
-                        example_outputs=dummy_output,
+                        example_outputs=dummy_output if dynamic_axes is None else None,
                         export_params=True,
                         opset_version=args.opset_version,
                         do_constant_folding=True,
-                        input_names=input_names,
-                        output_names=output_names,
-                        dynamic_axes=None,
-                        verbose=False)
+                        input_names=model_input_names,
+                        output_names=model_output_names,
+                        dynamic_axes=dynamic_axes,
+                        verbose=True)
         logger.info("onnx model convert done.")
         if args.is_onnxsim:
             logger.info("begin simplify onnx modek, and we will check 3 times...")
-            import onnx
             from onnxsim import simplify
             input_shapes = {"input": list(dummy_input.shape)}
             onnx_model = onnx.load(onnx_output_path)

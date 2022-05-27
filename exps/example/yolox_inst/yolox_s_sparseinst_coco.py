@@ -6,6 +6,8 @@ import os
 import itertools
 import torch
 import torch.nn as nn
+from yolox.utils import replace_module
+from yolox.models import SiLU
 
 from yolox.exp import MaskExp as MyExp
 
@@ -14,7 +16,7 @@ class Exp(MyExp):
     def __init__(self):
         super().__init__()
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
-        self.max_epoch = 12
+        self.max_epoch = 24
         self.no_aug_epochs = 2
         self.data_num_workers = 4
         self.no_eval = False
@@ -25,16 +27,20 @@ class Exp(MyExp):
         self.basic_lr_per_img = 4.0e-5 / 64.0
         self.weight_decay = 0.05
         self.postprocess_cfg = dict(
-            conf_thre=0.01,
+            conf_thre=0.05,
             mask_thre=0.45,
         )
         # LR Scheduler
         self.scheduler = "multistep"
-        self.milestones_epoch_step = (7, 10)
+        self.milestones_epoch_step = (16, 20)
         self.clip_norm_val = 0.0
         self.eval_interval = 3
         # Debug
         self.enable_debug = False
+        # Model export
+        self.export_input_names = ["input"]
+        self.export_output_names = ["masks", "scores"]
+        self.include_post = True
         self._get_data_info(self.dataset_config)
 
     def get_optimizer(self, batch_size):
@@ -99,3 +105,30 @@ class Exp(MyExp):
             milestones=self.milestones,
         )
         return scheduler
+    
+    def model_wrapper(self, model):
+        model = replace_module(model, nn.SiLU, SiLU)
+        class OModel(nn.Module):
+            """
+                model
+            """
+            def __init__(self, model, num_classes, postprocess_cfg, include_post=False):
+                super().__init__()
+                self.main_model = model
+                self.include_post = include_post
+                self.num_classes = num_classes
+                self.postprocess_cfg = postprocess_cfg
+            
+            def forward(self, input):
+                output = self.main_model(input)
+                if self.include_post:
+                    output \
+                        = self.main_model.postprocess(output, self.num_classes, **self.postprocess_cfg)
+                return output[0]
+            
+        return OModel(model, self.num_classes, self.postprocess_cfg, self.include_post)
+                    
+                
+
+
+

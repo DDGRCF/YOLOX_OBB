@@ -14,6 +14,7 @@ __all__ = [
     "fuse_model",
     "get_model_info",
     "replace_module",
+    "rewrite_module",
     "make_divisible"
 ]
 
@@ -89,7 +90,7 @@ def replace_module(module, replaced_module_type, new_module_type, replace_func=N
         model (nn.Module): module that already been replaced.
     """
 
-    def default_replace_func(replaced_module_type, new_module_type):
+    def default_replace_func(replaced_module_type, new_module_type, **kwargs):
         return new_module_type()
 
     if replace_func is None:
@@ -97,14 +98,22 @@ def replace_module(module, replaced_module_type, new_module_type, replace_func=N
 
     model = module
     if isinstance(module, replaced_module_type):
-        model = replace_func(replaced_module_type, new_module_type)
+        kwargs = module.__dict__
+        model = replace_func(replaced_module_type, new_module_type, **kwargs)
     else:  # recurrsively replace
         for name, child in module.named_children():
-            new_child = replace_module(child, replaced_module_type, new_module_type)
+            new_child = replace_module(child, replaced_module_type, new_module_type, replace_func)
             if new_child is not child:  # child is already replaced
                 model.add_module(name, new_child)
 
     return model
+
+def rewrite_module(module, rewrite_module_type, rewrite_func, **kwargs):
+    for module in module.modules():
+        if isinstance(module, rewrite_module_type):
+            rewrite_func(module, **kwargs);
+
+
 
 def make_divisible(x, divisor):
     # Returns nearest x divisible by divisor

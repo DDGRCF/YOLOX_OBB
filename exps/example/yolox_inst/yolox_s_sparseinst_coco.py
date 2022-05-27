@@ -7,6 +7,7 @@ import itertools
 import torch
 import torch.nn as nn
 from yolox.utils import replace_module
+
 from yolox.models import SiLU
 
 from yolox.exp import MaskExp as MyExp
@@ -107,7 +108,29 @@ class Exp(MyExp):
         return scheduler
     
     def model_wrapper(self, model):
+        import torch.nn.functional as F
+        from yolox.models import PPM, AdaptiveAvgPool2d_E
+        def replace_func(rep_module, new_module, **kwargs):
+            return new_module(kwargs["output_size"])
         model = replace_module(model, nn.SiLU, SiLU)
+        model = replace_module(model, nn.AdaptiveAvgPool2d, AdaptiveAvgPool2d_E, replace_func=replace_func)
+
+        def postprocess(output, num_classes=80, 
+                        conf_thre=0.1, mask_thre=0.45, 
+                        scale_factor=4, eps=1e-6, **kwargs):
+            bs_masks, bs_scores = output[0][0], output[1][0]
+            bs_scores, bs_labels = bs_scores.max(dim=-1)
+            keep = bs_scores > conf_thre
+            bs_scores = bs_scores[keep]
+            bs_labels = bs_labels[keep]
+            bs_masks = bs_masks[keep]
+            bs_masks_ = (bs_masks > mask_thre).float()
+            bs_scores = bs_scores * ((bs_masks_ * bs_masks).sum((1, 2)) / (bs_masks_.sum((1, 2)) + eps))
+            bs_masks = F.interpolate(bs_masks[:, None], scale_factor=scale_factor, 
+                                mode="bilinear", align_corners=False).squeeze(1)
+            bs_masks = (bs_masks > mask_thre).type(bs_scores.dtype)
+            bs_scores = torch.cat((bs_scores, bs_labels.type(bs_scores.dtype)), dim=-1)
+            return bs_masks, bs_scores
         class OModel(nn.Module):
             """
                 model
@@ -122,13 +145,7 @@ class Exp(MyExp):
             def forward(self, input):
                 output = self.main_model(input)
                 if self.include_post:
-                    output \
-                        = self.main_model.postprocess(output, self.num_classes, **self.postprocess_cfg)
-                return output[0]
+                    output = postprocess(output, self.num_classes, **self.postprocess_cfg)
+                return output
             
         return OModel(model, self.num_classes, self.postprocess_cfg, self.include_post)
-                    
-                
-
-
-

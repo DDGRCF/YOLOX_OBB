@@ -91,28 +91,21 @@ def main():
     deploy_model.eval()
     deploy_model.to(device)
     # input 
-    logger.info("begin convert model to torchscript...")
     inference_image_ = cv2.imread(args.inference_image)
     i_h, i_w, c = inference_image_.shape 
     inference_image = np.zeros((*(exp.test_size), c), dtype=np.uint8)
     ratio = min(exp.test_size[0] / i_h, exp.test_size[1] / i_w)
     inference_image_ = cv2.resize(inference_image_, (int(i_w * ratio), int(i_h * ratio)))
     inference_image[:inference_image_.shape[0], :inference_image_.shape[1] :] = inference_image_
-    # dummy_input = (torch.from_numpy(inference_image) / 255).permute(2, 0, 1)[None]
-    # dummy_input = np.transpose(inference_image_ / 255.0, (2, 0, 1))
-    dummy_input = np.transpose(inference_image, (2, 0, 1))
-    # dummy_input -= np.array([0.485, 0.456, 0.406]).reshape(3, 1, 1)
-    # dummy_input /= np.array([0.229, 0.224, 0.225]).reshape(3, 1, 1)
+    dummy_input = np.transpose(inference_image, (2, 0, 1)) / 255.
     dummy_input = torch.from_numpy(dummy_input)[None].to(device).float()
-    # dummy_input = torch.rand(1, 3, *(exp.test_size)).to(device)
-    # dummy_input = torch.rand(1, 3, 640, 640).to(device)
-    with torch.jit.optimized_execution(True):
-        model_torchscript = torch.jit.trace(deploy_model, dummy_input)
-    logger.info("torchscript convert done") 
-    # if args.out_type == "torchscript" or args.out_type == "onnx" or args.out_type == "tensorrt":
     if args.out_type == "torchscript":
+        logger.info("begin convert model to torchscript...")
+        with torch.jit.optimized_execution(True):
+            deploy_model= torch.jit.trace(deploy_model, dummy_input)
+        logger.info("torchscript convert done") 
         torchscript_output_path = os.path.join(dst_dir, args.output_name + ".pt")
-        model_torchscript.save(torchscript_output_path)
+        deploy_model.save(torchscript_output_path)
         logger.info("generated torchsciopt model named {}".format(args.output_name))
     if args.out_type == "onnx" or args.out_type == "tensorrt":
         onnx_output_path = os.path.join(dst_dir, args.output_name + ".onnx")
@@ -120,20 +113,21 @@ def main():
         logger.info("onnx model output name is {}".format(model_output_names))
 
         # generate example output
-        dummy_output = model_torchscript(dummy_input)
+        dummy_output = deploy_model(dummy_input)
 
         logger.info("begin convert onnx model...")
-        torch.onnx.export(copy.deepcopy(model_torchscript),
-                        dummy_input,
-                        onnx_output_path,
-                        example_outputs=dummy_output if dynamic_axes is None else None,
-                        export_params=True,
-                        opset_version=args.opset_version,
-                        do_constant_folding=True,
-                        input_names=model_input_names,
-                        output_names=model_output_names,
-                        dynamic_axes=dynamic_axes,
-                        verbose=True)
+        torch.onnx.export(deploy_model,
+                            dummy_input,
+                            onnx_output_path,
+                            example_outputs=dummy_output if dynamic_axes is None else None,
+                            export_params=True,
+                            opset_version=11,#  args.opset_version,
+                            do_constant_folding=True,
+                            training=torch.onnx.TrainingMode.EVAL,
+                            input_names=model_input_names,
+                            output_names=model_output_names,
+                            dynamic_axes=dynamic_axes,
+                            verbose=True)
         logger.info("onnx model convert done.")
         if args.is_onnxsim:
             logger.info("begin simplify onnx modek, and we will check 3 times...")

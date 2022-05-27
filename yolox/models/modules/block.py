@@ -19,18 +19,22 @@ class CrossConv(nn.Module):
 
 class PPM(nn.Module):
 
-    def __init__(self, in_channels, out_channels=512, sizes=(1, 2, 3, 6), norm_func=None, act_func=nn.ReLU, **kwargs):
+    def __init__(self, in_channels, out_channels=512, 
+                 sizes=(1, 2, 3, 6), norm_func=None, 
+                 act_func=nn.ReLU, export=False,
+                 **kwargs):
         super().__init__()
         assert out_channels % len(sizes) == 0
         channels = out_channels // len(sizes)
         self.stages = []
+        self.sizes = sizes
+        self.export=export
         self.act_func = act_func
         self.norm_func = norm_func
         self.stages = nn.ModuleList(
             [self._make_stage(in_channels, channels, size, **kwargs) for size in sizes]
         )
-        # self.bottleneck = nn.Conv2d(
-        #     in_channels + len(sizes) * channels, in_channels, 1)
+
         self.bottleneck = Conv(
             in_channels + len(sizes) * channels, in_channels, 1, norm_func=norm_func, act_func=act_func, **kwargs
         )
@@ -281,8 +285,11 @@ class Coordinates(nn.Module):
     def forward(self, x):
         if self.mode == "absolute":
             h, w = x.size()[-2:]
-            y_loc = torch.linspace(-1, 1, h, device=x.device)
-            x_loc = torch.linspace(-1, 1, w, device=x.device)
+            # y_loc = torch.linspace(-1, 1, h, device=x.device)
+            # x_loc = torch.linspace(-1, 1, w, device=x.device)
+
+            y_loc = torch.arange(-1, 1, 2 / h, device=x.device) # TODO: figout 
+            x_loc = torch.arange(-1, 1, 2 / w, device=x.device)
             y_loc, x_loc = torch.meshgrid(y_loc, x_loc)
             y_loc = y_loc.expand([x.shape[0], 1, -1, -1])
             x_loc = x_loc.expand([x.shape[0], 1, -1, -1])

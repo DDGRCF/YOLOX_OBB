@@ -9,7 +9,7 @@ from torch.nn import init
 from .detect import Detect
 from ..init_functions import *
 from yolox.utils import (get_world_size, is_dist_avail_and_initialized, 
-                         mask_overlaps, dice_score, linear_sum_assignment_with_inf)
+                         mask_overlaps, dice_score)
 
 class SparseInstDetect(Detect):
     def __init__(self, 
@@ -113,8 +113,8 @@ class SparseInstDetect(Detect):
         device = inps[0].device
         dtype = inps[0].dtype
         masks_t = targets[1] # (list)
-        # if not hasattr(self, "mask_stream"):
-        #     self.mask_stream = torch.cuda.Stream()
+        if not hasattr(self, "mask_stream"):
+            self.mask_stream = torch.cuda.Stream()
         # with torch.cuda.stream(self.mask_stream):
         #     target_masks = [torch.from_numpy(m).to(device, non_blocking=True).type(dtype) for m in masks_t]
         target_masks = [torch.from_numpy(m).to(device) for m in masks_t]
@@ -138,8 +138,6 @@ class SparseInstDetect(Detect):
         target_masks = F.interpolate(
             target_masks[:, None], size=pred_masks.shape[-2:], 
             mode='bilinear', align_corners=False).squeeze(1)
-        # valid_masks = target_masks.sum((-1, -2)) > 0
-        # assert valid_masks.all(), f"{valid_masks}"
         indices = self.sparseinst_matcher(target_masks, target_bboxes, target_labels, pred_masks, pred_logits, nlabel)
         # logits loss
         idx = self._get_src_permutation_idx(indices)
@@ -232,7 +230,7 @@ class SparseInstDetect(Detect):
         C = C.view(B, N, -1).cpu() # (bs, N, gts)
         # hungarian matching
         try:
-            indices = [linear_sum_assignment_with_inf(c[i], maximize=True)
+            indices = [linear_sum_assignment(c[i], maximize=True)
                         for i, c in enumerate(C.split(nlabel, -1))] # [(N_id, gts_id)]
             indices = [(torch.as_tensor(i, dtype=torch.int64), torch.as_tensor(
                 j, dtype=torch.int64)) for i, j in indices]

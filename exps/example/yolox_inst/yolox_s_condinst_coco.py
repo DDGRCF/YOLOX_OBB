@@ -13,7 +13,7 @@ from yolox.exp import MaskExp as MyExp
 class Exp(MyExp):
     def __init__(self):
         super().__init__()
-        self.modules_config = "configs/modules/condinst_darknet.yaml"
+        self.modules_config = "configs/modules/condinst_darknet_simplify.yaml"
         self.losses_config = "configs/losses/condinst_losses.yaml"
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
 

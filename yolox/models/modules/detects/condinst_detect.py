@@ -113,7 +113,6 @@ class CondInstDetectX(DetectX):
             grids = [torch.cat(grids) for _ in range(batch_size)]
             strides = [torch.cat(strides) for _ in range(batch_size)]
             levels = [torch.cat(levels) for _ in range(batch_size)]
-            # grids_ps = grids.expand(batch_size, -1, 2) * strides[..., None] + 0.5 * strides[..., None]
             x0y0 = outputs[:, :, 0:2] - outputs[:, :, 2:4] / 2
             x1y1 = outputs[:, :, 0:2] + outputs[:, :, 2:4] / 2
             outputs = torch.cat((x0y0, x1y1, outputs[:, :, 4:]), dim=-1)
@@ -132,7 +131,7 @@ class CondInstDetectX(DetectX):
                                           class_pred.squeeze(-1), 
                                           score_factors=obj_conf.squeeze(-1), 
                                           iou_thr=self.bbox_iou_thre,
-                                          score_thr=self.bbox_nms_topk, 
+                                          max_num=self.bbox_nms_topk, 
                                           class_agnostic=False)
                 outputs_[i] = detections[keep_inds]
                 img_inds[i] = img_ind[keep_inds]
@@ -141,10 +140,10 @@ class CondInstDetectX(DetectX):
                 strides[i] = strides[i][keep_inds]
                 levels[i] = levels[i][keep_inds]
             outputs = torch.stack(outputs_, dim=0) # (bs, 100, 4 + 1 + 1 + 1)
-            img_inds = torch.cat(img_inds, dim=0)
+            img_inds = torch.cat(img_inds, dim=0).long()
             cnt_outs = torch.cat(cnt_outs, dim=0)
             grids = torch.cat(grids, dim=0)
-            levels = torch.cat(levels, dim=0)
+            levels = torch.cat(levels, dim=0).long()
             strides = torch.cat(strides, dim=0)
             grids_ps = grids * strides[..., None] + 0.5 * strides[..., None]
             if len(cnt_outs) > 0:
@@ -606,6 +605,8 @@ class CondInstDetectX(DetectX):
                     mask_thre=0.50, scale_factor=4, eps=1e-6, **kwargs):
         outputs = [(None, None) for _ in range(len(inputs[0]))]
         for i, (bs_masks, bs_bboxes) in enumerate(zip(inputs[0], inputs[1])):
+            if bs_masks.size(0) == 0:
+                continue
             bs_scores = bs_bboxes[:, 4] * bs_bboxes[:, 5]
             bs_labels = bs_bboxes[:, -1]
             bs_bboxes = bs_bboxes[:, :4]

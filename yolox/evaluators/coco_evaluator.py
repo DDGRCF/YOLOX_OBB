@@ -221,11 +221,10 @@ class COCOEvaluator:
             elif labels.shape[-1]==2 and labels.ndim==2:
                 scores = labels[:, 0]
             else:
-                raise ValueError
+                raise NotImplementedError
             if masks.shape[1] != self.img_size[0] or masks.shape[2] != self.img_size[1]:
                 masks = F.interpolate(masks[:, None], size=(self.img_size[0], self.img_size[1]), 
                                     mode="bilinear", aligne_corners=False).squeeze(1)
-            masks = (masks > 0)
             masks = masks[:, :img_h, :img_w] 
             clses = clses.cpu().numpy()
             scores = scores.cpu().numpy()
@@ -288,7 +287,7 @@ class COCOEvaluator:
                 }  # COCO json format
                 seg = coco_mask_utils.encode(
                     np.asarray(masks[ind], order="F", dtype=np.uint8)
-                )[0]
+                )
                 if isinstance(seg["counts"], bytes):
                     seg["counts"] = seg["counts"].decode()
                 pred_data.update({"segmentation": seg})

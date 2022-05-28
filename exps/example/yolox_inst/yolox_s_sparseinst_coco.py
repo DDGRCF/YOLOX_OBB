@@ -16,6 +16,7 @@ from yolox.exp import MaskExp as MyExp
 class Exp(MyExp):
     def __init__(self):
         super().__init__()
+        self.modules_config = "configs/modules/sparseinst_darknet_simplify.yaml"
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
         self.max_epoch = 24
         self.no_aug_epochs = 2
@@ -28,7 +29,7 @@ class Exp(MyExp):
         self.basic_lr_per_img = 4.0e-5 / 64.0
         self.weight_decay = 0.05
         self.postprocess_cfg = dict(
-            conf_thre=0.05,
+            conf_thre=0.005,
             mask_thre=0.45,
         )
         # LR Scheduler

@@ -90,7 +90,8 @@ def multiclass_nms(bboxes,
         max_coordinate = bboxes.max() - bboxes.min()
         offsets = labels.to(bboxes) * (max_coordinate + torch.tensor(1).to(bboxes))
         bboxes_for_nms = bboxes.clone()
-        bboxes_for_nms[:, :2] = bboxes_for_nms[:, :2] + offsets[:, None]
+        # bboxes_for_nms[:, :2] = bboxes_for_nms[:, :2] + offsets[:, None]
+        bboxes_for_nms = bboxes_for_nms + offsets[:, None]
     # if torch.jit.is_tracing():
     #     is_filtering_by_score = score_thr > 0
     #     if is_filtering_by_score:

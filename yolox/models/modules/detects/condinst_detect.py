@@ -126,13 +126,18 @@ class CondInstDetectX(DetectX):
                 cnt_out = output[:, self.reg_dim + 1 + self.num_classes :]
                 img_ind = torch.full_like(class_conf, i)
                 detections  = torch.cat((bboxes, obj_conf, class_conf, class_pred.float()), 1)
-                keep_inds = multiclass_nms(bboxes, 
-                                          class_conf.squeeze(-1), 
-                                          class_pred.squeeze(-1), 
-                                          score_factors=obj_conf.squeeze(-1), 
+                if len(bboxes) > self.bbox_keep_topk:
+                    topk_keep_inds = torch.topk((obj_conf * class_conf).squeeze(-1), k=self.bbox_keep_topk, sorted=True)[1]
+                else:
+                    topk_keep_inds = torch.arange(len(bboxes), device=device)
+                keep_inds = multiclass_nms(bboxes[topk_keep_inds], 
+                                          class_conf.squeeze(-1)[topk_keep_inds], 
+                                          class_pred.squeeze(-1)[topk_keep_inds], 
+                                          score_factors=obj_conf.squeeze(-1)[topk_keep_inds], 
                                           iou_thr=self.bbox_iou_thre,
                                           max_num=self.bbox_nms_topk, 
                                           class_agnostic=False)
+                keep_inds = topk_keep_inds[keep_inds]
                 outputs_[i] = detections[keep_inds]
                 img_inds[i] = img_ind[keep_inds]
                 cnt_outs[i] = cnt_out[keep_inds]
@@ -140,10 +145,10 @@ class CondInstDetectX(DetectX):
                 strides[i] = strides[i][keep_inds]
                 levels[i] = levels[i][keep_inds]
             outputs = torch.stack(outputs_, dim=0) # (bs, 100, 4 + 1 + 1 + 1)
-            img_inds = torch.cat(img_inds, dim=0).long()
+            img_inds = torch.cat(img_inds, dim=0).type(torch.int64)
+            levels = torch.cat(levels, dim=0).type(torch.int64)
             cnt_outs = torch.cat(cnt_outs, dim=0)
             grids = torch.cat(grids, dim=0)
-            levels = torch.cat(levels, dim=0).long()
             strides = torch.cat(strides, dim=0)
             grids_ps = grids * strides[..., None] + 0.5 * strides[..., None]
             if len(cnt_outs) > 0:
@@ -614,10 +619,11 @@ class CondInstDetectX(DetectX):
             bs_scores = bs_scores[keep]
             bs_labels = bs_labels[keep]
             bs_masks = bs_masks[keep]
+            bs_bboxes = bs_bboxes[keep]
             if bs_scores.size(0) == 0:
                 continue
             bs_masks = F.interpolate(bs_masks[:, None], scale_factor=scale_factor, 
                                 mode="bilinear", align_corners=False).squeeze(1)
             bs_masks = (bs_masks > mask_thre).type(bs_scores.dtype)
-            outputs[i] = (bs_masks, torch.stack((bs_bboxes, bs_scores[..., None], bs_labels[..., None]), dim=-1))
+            outputs[i] = (bs_masks, torch.cat((bs_bboxes, bs_scores[..., None], bs_labels[..., None]), dim=-1))
         return outputs

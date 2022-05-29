@@ -16,6 +16,7 @@ Functions:
     args: [1, sum, norm]
 Args:
   prior_prob: 0.01
-  bbox_iou_thre: 0.50
-  bbox_nms_topk: 1000
+  bbox_keep_topk: 1000
+  bbox_iou_thre: 0.5
+  bbox_nms_topk: 100
   

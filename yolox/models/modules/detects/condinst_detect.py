@@ -607,7 +607,7 @@ class CondInstDetectX(DetectX):
     
     @staticmethod
     def postprocess(inputs, num_classes=80, conf_thre=0.1, 
-                    mask_thre=0.50, scale_factor=4, eps=1e-6, **kwargs):
+                    mask_thre=0.50, eps=1e-6, **kwargs):
         outputs = [(None, None) for _ in range(len(inputs[0]))]
         for i, (bs_masks, bs_bboxes) in enumerate(zip(inputs[0], inputs[1])):
             if bs_masks.size(0) == 0:
@@ -622,8 +622,6 @@ class CondInstDetectX(DetectX):
             bs_bboxes = bs_bboxes[keep]
             if bs_scores.size(0) == 0:
                 continue
-            bs_masks = F.interpolate(bs_masks[:, None], scale_factor=scale_factor, 
-                                mode="bilinear", align_corners=False).squeeze(1)
             bs_masks = (bs_masks > mask_thre).type(bs_scores.dtype)
             outputs[i] = (bs_masks, torch.cat((bs_bboxes, bs_scores[..., None], bs_labels[..., None]), dim=-1))
         return outputs

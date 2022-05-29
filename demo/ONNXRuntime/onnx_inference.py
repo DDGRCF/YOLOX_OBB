@@ -2,21 +2,24 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) Megvii, Inc. and its affiliates.
 
-import argparse
 import os
-
 import cv2
-import numpy as np
-
+import argparse
 import onnxruntime
-
+from yolox.exp import get_exp
+from yolox.utils import mkdir, Predictor, DictAction
 from yolox.data.data_augment import preproc as preprocess
-from yolox.data.datasets import COCO_CLASSES
-from yolox.utils import mkdir, multiclass_nms, demo_postprocess, vis
 
 
 def make_parser():
     parser = argparse.ArgumentParser("onnxruntime inference sample")
+    parser.add_argument(
+        "-f",
+        "--exp_file",
+        default=None,
+        type=str,
+        help="experiment description file"
+    )
     parser.add_argument(
         "-m",
         "--model",
@@ -46,47 +49,40 @@ def make_parser():
         help="Score threshould to filter the result.",
     )
     parser.add_argument(
-        "--input_shape",
-        type=str,
-        default="640,640",
-        help="Specify an input shape for inference.",
-    )
+        "--output_format", 
+        nargs="+", choices=["bbox", "mask", "obb"], 
+        default="bbox")
     parser.add_argument(
-        "--with_p6",
-        action="store_true",
-        help="Whether your model uses p6 in FPN/PAN.",
-    )
+        "--options",
+        nargs="+",
+        action=DictAction,
+        help="setting some uncertainty values: conf_thre | nms_thre")
     return parser
 
 
 if __name__ == '__main__':
     args = make_parser().parse_args()
-
-    input_shape = tuple(map(int, args.input_shape.split(',')))
-    origin_img = cv2.imread(args.image_path)
-    img, ratio = preprocess(origin_img, input_shape)
+    if len(args.output_format) == 1:
+        args.output_format = args.output_format[0]
+    exp = get_exp(args.exp_file, args.name)
+    exp.merge(args.options)
+    input_names = getattr(exp, "export_input_names", "input")
+    output_names = getattr(exp, "export_output_names", "output")
+    if not isinstance(input_names, (tuple, list)):
+        model_input_names = [input_names]
+    if not isinstance(model_input_names, (tuple, list)):
+        model_output_names = [output_names]
+    predictor = Predictor(model=None, exp=exp, output_format=args.output_format)
+    # input
+    ori_image = cv2.imread(args.image_path)
+    img, ratio = preprocess(ori_image, exp.test_size)
+    img_infos = {"raw_img": ori_image, "ratio": ratio}
 
     session = onnxruntime.InferenceSession(args.model)
 
-    ort_inputs = {session.get_inputs()[0].name: img[None, :, :, :]}
-    output = session.run(None, ort_inputs)
-    predictions = demo_postprocess(output[0], input_shape, p6=args.with_p6)[0]
-
-    boxes = predictions[:, :4]
-    scores = predictions[:, 4:5] * predictions[:, 5:]
-
-    boxes_xyxy = np.ones_like(boxes)
-    boxes_xyxy[:, 0] = boxes[:, 0] - boxes[:, 2]/2.
-    boxes_xyxy[:, 1] = boxes[:, 1] - boxes[:, 3]/2.
-    boxes_xyxy[:, 2] = boxes[:, 0] + boxes[:, 2]/2.
-    boxes_xyxy[:, 3] = boxes[:, 1] + boxes[:, 3]/2.
-    boxes_xyxy /= ratio
-    dets = multiclass_nms(boxes_xyxy, scores, nms_thr=0.45, score_thr=0.1)
-    if dets is not None:
-        final_boxes, final_scores, final_cls_inds = dets[:, :4], dets[:, 4], dets[:, 5]
-        origin_img = vis(origin_img, final_boxes, final_scores, final_cls_inds,
-                         conf=args.score_thr, class_names=COCO_CLASSES)
-
+    ort_inputs = {input_names[0]: img[None, :, :, :]}
+    output = session.run(output_names, ort_inputs)
+    res_vis = predictor.visual(output, img_infos)
     mkdir(args.output_dir)
     output_path = os.path.join(args.output_dir, args.image_path.split("/")[-1])
-    cv2.imwrite(output_path, origin_img)
+    cv2.imwrite(output_path, res_vis)

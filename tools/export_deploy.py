@@ -4,7 +4,6 @@ import onnx
 import torch
 import argparse
 import numpy as np
-import copy
 from loguru import logger
 from yolox.exp import get_exp
 from yolox.utils import DictAction
@@ -36,6 +35,7 @@ def make_parser():
     parser.add_argument("--opset-version", type=int, default=11)
     parser.add_argument("--is-onnxsim", action="store_true", default=False)
     parser.add_argument("--workspace-size", type=int, default=32)
+    parser.add_argument("--test_model", action="store_true", default=False)
     parser.add_argument(
         "--options",
         nargs="+",
@@ -59,7 +59,7 @@ def main():
     dynamic_axes = getattr(exp, "export_dynamic_axes", None)
     if not isinstance(model_input_names, (tuple, list)):
         model_input_names = [model_input_names]
-    if not isinstance(model_input_names, (tuple, list)):
+    if not isinstance(model_output_names, (tuple, list)):
         model_output_names = [model_output_names]
 
     if not args.experiment_name:
@@ -97,7 +97,7 @@ def main():
     ratio = min(exp.test_size[0] / i_h, exp.test_size[1] / i_w)
     inference_image_ = cv2.resize(inference_image_, (int(i_w * ratio), int(i_h * ratio)))
     inference_image[:inference_image_.shape[0], :inference_image_.shape[1] :] = inference_image_
-    dummy_input = np.transpose(inference_image, (2, 0, 1)) / 255.
+    dummy_input = np.transpose(inference_image, (2, 0, 1))
     dummy_input = torch.from_numpy(dummy_input)[None].to(device).float()
     if args.out_type == "torchscript":
         logger.info("begin convert model to torchscript...")

@@ -83,17 +83,17 @@ def mask_vis(img, masks,
         color = (_COLORS[cls_id] * 255).astype(np.uint8)
         img = np.ascontiguousarray(img, dtype=np.int32)
         img[mask > 0] = img[mask > 0] * 0.5 + color.reshape(1, 3) * 0.5
+        if enable_put_bbox and bboxes is None:
+            bbox = mask_find_bboxes(mask)
+            x0 = bbox[0]
+            y0 = bbox[1]
+            x1 = bbox[0] + bbox[2]
+            y1 = bbox[1] + bbox[3]
+        else:
+            bbox = bboxes[i].astype(np.int32)
+            x0, y0, x1, y1 = bbox[0], bbox[1], bbox[2], bbox[3]
+        cv2.rectangle(img, (x0, y0), (x1, y1), color.tolist(), 2)
         if enable_put_text:
-            if enable_put_bbox and bboxes is None:
-                bbox = mask_find_bboxes(mask)
-                x0 = bbox[0]
-                y0 = bbox[1]
-                x1 = bbox[0] + bbox[2]
-                y1 = bbox[1] + bbox[3]
-            else:
-                bbox = bboxes[i].astype(np.int32)
-                x0, y0, x1, y1 = bbox[0], bbox[1], bbox[2], bbox[3]
-            cv2.rectangle(img, (x0, y0), (x1, y1), color.tolist(), 2)
             text = '{}:{:.1f}%'.format(class_names[cls_id], score * 100)
             txt_color = (0, 0, 0) if np.mean(_COLORS[cls_id]) > 0.5 else (255, 255, 255)
             font = cv2.FONT_HERSHEY_SIMPLEX

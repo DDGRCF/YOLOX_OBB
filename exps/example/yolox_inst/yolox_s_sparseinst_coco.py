@@ -6,9 +6,7 @@ import os
 import itertools
 import torch
 import torch.nn as nn
-from yolox.utils import replace_module
 
-from yolox.models import SiLU
 
 from yolox.exp import MaskExp as MyExp
 
@@ -26,7 +24,7 @@ class Exp(MyExp):
         self.mosaic_prob = 0.0
         # copy paste data augmentation | default set 0.0 for fast train
         self.copy_paste_prob = 0.0
-        self.basic_lr_per_img = 4.0e-5 / 64.0
+        self.basic_lr_per_img = 2.5e-5 / 64.0
         self.weight_decay = 0.05
         self.postprocess_cfg = dict(
             conf_thre=0.005,
@@ -110,12 +108,14 @@ class Exp(MyExp):
     
     def model_wrapper(self, model):
         import torch.nn.functional as F
-        from yolox.models import PPM, AdaptiveAvgPool2d_E
+        from yolox.utils import replace_module
+        from yolox.models import AdaptiveAvgPool2d_E, SiLU
         def replace_func(rep_module, new_module, **kwargs):
             return new_module(kwargs["output_size"])
         model = replace_module(model, nn.SiLU, SiLU)
         model = replace_module(model, nn.AdaptiveAvgPool2d, AdaptiveAvgPool2d_E, replace_func=replace_func)
 
+        # for 1 batchsize
         def postprocess(output, num_classes=80, 
                         conf_thre=0.1, mask_thre=0.45, 
                         scale_factor=4, eps=1e-6, **kwargs):
@@ -132,6 +132,8 @@ class Exp(MyExp):
             bs_masks = (bs_masks > mask_thre).type(bs_scores.dtype)
             bs_scores = torch.cat((bs_scores, bs_labels.type(bs_scores.dtype)), dim=-1)
             return bs_masks, bs_scores
+
+        # for OModel
         class OModel(nn.Module):
             """
                 model

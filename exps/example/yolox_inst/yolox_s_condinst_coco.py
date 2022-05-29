@@ -34,10 +34,13 @@ class Exp(MyExp):
         self.copy_paste_prob = 0.0
         self.postprocess_cfg = dict(
             conf_thre=0.05,
-            mask_thre=0.50,
+            mask_thre=0.45,
         )
+        self.include_post = True
         self.eval_interval = 5
         self.clip_norm_val = 0.0
+        self.export_input_names = ["input"]
+        self.export_output_names = ["masks", "bboxes"]
         # Debug
         self.enable_debug = False
         self._get_data_info(self.dataset_config)
@@ -110,3 +113,35 @@ class Exp(MyExp):
             min_lr_ratio=self.min_lr_ratio,
         )
         return scheduler
+
+    def model_wrapper(self, model):
+        from yolox.models import SiLU
+        from yolox.utils import replace_module
+        model = replace_module(model, nn.SiLU, SiLU)
+
+        def postprocess(output, num_classes=80, conf_thre=0.1, mask_thre=0.45, **kwargs):
+            bs_masks, bs_bboxes = output[0][0], output[1][0]
+            bs_scores = bs_bboxes[:, 4] * bs_bboxes[:, 5]
+            bs_labels = bs_bboxes[:, -1]
+            bs_bboxes = bs_bboxes[:, :4]
+            bs_masks = (bs_masks > mask_thre).type(bs_scores.dtype)
+            return bs_masks, torch.cat((bs_bboxes, bs_scores[:, None], bs_labels[:, None]), dim=1)
+        
+        class OModel(nn.Module):
+            def __init__(self, model, num_classes, postprocess_cfg, include_post=False):
+                super().__init__()
+                self.main_model = model
+                self.include_post = include_post
+                self.num_classes = num_classes
+                self.postprocess_cfg = postprocess_cfg
+            
+            def forward(self, input):
+                output = self.main_model(input)
+                if self.include_post:
+                    output = postprocess(output, self.num_classes, **self.postprocess_cfg)
+                return output
+
+        return OModel(model, self.num_classes, self.postprocess_cfg, self.include_post)
+
+
+

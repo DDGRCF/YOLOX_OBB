@@ -56,7 +56,7 @@ If We want to train your datasets, firstly you first convert your data as dota d
 ```shell
 $ cd my_exps
 $ bash coco2dota.sh
-# PS: you should change filename、diranme and so on.
+# PS: you should change filename、dirname and so on.
 ```
 #### **Convert dota style into  BboxToolkit style**
 This part please reference [BboxToolkit](./BboxToolkit/USAGE.md)

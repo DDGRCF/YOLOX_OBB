@@ -64,13 +64,13 @@ if __name__ == '__main__':
     args = make_parser().parse_args()
     if len(args.output_format) == 1:
         args.output_format = args.output_format[0]
-    exp = get_exp(args.exp_file, args.name)
+    exp = get_exp(args.exp_file, None)
     exp.merge(args.options)
     input_names = getattr(exp, "export_input_names", "input")
     output_names = getattr(exp, "export_output_names", "output")
     if not isinstance(input_names, (tuple, list)):
         model_input_names = [input_names]
-    if not isinstance(model_input_names, (tuple, list)):
+    if not isinstance(output_names, (tuple, list)):
         model_output_names = [output_names]
     predictor = Predictor(model=None, exp=exp, output_format=args.output_format)
     # input

@@ -260,7 +260,7 @@ class COCOEvaluator:
             if masks.shape[1] != self.img_size[0] or masks.shape[2] != self.img_size[1]: 
                 masks = F.interpolate(masks[:, None], size=(self.img_size[0], self.img_size[1]), 
                                     mode="bilinear", aligne_corners=False).squeeze(1)
-            masks = masks[:, img_h, img_w]
+            masks = masks[:, :img_h, :img_w]
             bboxes = output[:, :4]
 
             # preprocessing: resize

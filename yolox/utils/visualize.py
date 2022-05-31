@@ -89,10 +89,10 @@ def mask_vis(img, masks,
             y0 = bbox[1]
             x1 = bbox[0] + bbox[2]
             y1 = bbox[1] + bbox[3]
-        else:
+        elif enable_put_bbox:
             bbox = bboxes[i].astype(np.int32)
             x0, y0, x1, y1 = bbox[0], bbox[1], bbox[2], bbox[3]
-        cv2.rectangle(img, (x0, y0), (x1, y1), color.tolist(), 2)
+            cv2.rectangle(img, (x0, y0), (x1, y1), color.tolist(), 2)
         if enable_put_text:
             text = '{}:{:.1f}%'.format(class_names[cls_id], score * 100)
             txt_color = (0, 0, 0) if np.mean(_COLORS[cls_id]) > 0.5 else (255, 255, 255)

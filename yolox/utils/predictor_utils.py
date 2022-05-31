@@ -3,6 +3,7 @@ import cv2
 import os
 import time
 import torch.nn.functional as F
+import torch.nn as nn
 from yolox.data import ValTransform
 from loguru import logger
 from .visualize import obb_vis, bbox_vis, mask_vis
@@ -203,6 +204,7 @@ class Predictor(object):
     def visual_mask(self, output, img_info, vis_conf=0.1, with_bbox=False):
         # ratio = img_info["ratio"]
         img = img_info["raw_img"]
+        ratio = img_info["ratio"]
         if output[0] is None or output[1] is None:
             return img
         masks = output[0]
@@ -234,10 +236,10 @@ class Predictor(object):
             bboxes = None
         elif output.shape[-1] == 7 and output.ndim == 2:
             scores = output[:, 4] * output[:, 5] 
-            bboxes = output[:, :4]
+            bboxes = output[:, :4] / ratio
         elif output.shape[-1] == 6 and output.ndim == 2:
             scores = output[:, 4]
-            bboxes = output[:, :4]
+            bboxes = output[:, :4] / ratio
         else:
             raise NotImplementedError
         vis_res = mask_vis(img, masks, 

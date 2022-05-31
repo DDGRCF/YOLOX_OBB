@@ -16,7 +16,7 @@ class Exp(MyExp):
         super().__init__()
         self.modules_config = "configs/modules/sparseinst_darknet_simplify.yaml"
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
-        self.max_epoch = 24
+        self.max_epoch = 12
         self.no_aug_epochs = 2
         self.data_num_workers = 4
         self.no_eval = False
@@ -32,12 +32,12 @@ class Exp(MyExp):
         )
         # LR Scheduler
         self.scheduler = "multistep"
-        self.milestones_epoch_step = (16, 20)
+        self.milestones_epoch_step = (9, 11)
         self.clip_norm_val = 0.0
         self.eval_interval = 3
         # Debug
         self.enable_debug = False
-        # Model export
+        # Model export (onnx name)
         self.export_input_names = ["input"]
         self.export_output_names = ["masks", "scores"]
         self.include_post = True
@@ -67,6 +67,7 @@ class Exp(MyExp):
                     torch.nn.utils.clip_grad_norm_(all_params, clip_norm_val)
                     super().step(closure=closure)
 
+            # NOTE:if add fp16 to model, adam optimizer should be added (eps=1e-3), otherwise it is easy to appear nan
             self.optimizer = (FullModelGradientClippingOptimizer 
                               if clip_norm_val > 0.0 else optim)(pg, lr=lr, amsgrad=False, weight_decay=self.weight_decay)
 
@@ -109,11 +110,14 @@ class Exp(MyExp):
     def model_wrapper(self, model):
         import torch.nn.functional as F
         from yolox.utils import replace_module
-        from yolox.models import AdaptiveAvgPool2d_E, SiLU
+        from yolox.models import SiLU, AdaptiveAvgPool2d__forward
+
         def replace_func(rep_module, new_module, **kwargs):
-            return new_module(kwargs["output_size"])
+            rep_module.forward = AdaptiveAvgPool2d__forward
+            return rep_module
+
         model = replace_module(model, nn.SiLU, SiLU)
-        model = replace_module(model, nn.AdaptiveAvgPool2d, AdaptiveAvgPool2d_E, replace_func=replace_func)
+        model = replace_module(model, nn.AdaptiveAvgPool2d, None, replace_func=replace_func)
 
         # for 1 batchsize
         def postprocess(output, num_classes=80, 

@@ -111,7 +111,6 @@ def main():
         onnx_output_path = os.path.join(dst_dir, args.output_name + ".onnx")
         logger.info("onnx model input name is {}".format(model_input_names))
         logger.info("onnx model output name is {}".format(model_output_names))
-
         # generate example output
         dummy_output = deploy_model(dummy_input)
 

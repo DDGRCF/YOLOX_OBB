@@ -252,7 +252,7 @@ class SparseInstDetect(Detect):
         return batch_idx, tgt_idx
 
     @staticmethod
-    def postprocess(inputs, num_classes=80, conf_thre=0.1, 
+    def postprocess(inputs, num_classes=80, conf_thre=0.005, 
                     mask_thre=0.45, scale_factor=4, eps=1e-6, **kwargs):
         outputs = [(None, None) for _ in range(inputs[0].shape[0])]
         for i, (bs_masks, bs_scores) in enumerate(zip(inputs[0], inputs[1])):

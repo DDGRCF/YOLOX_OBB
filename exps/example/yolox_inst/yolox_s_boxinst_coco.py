@@ -14,7 +14,7 @@ from yolox.exp import MaskExp as MyExp
 class Exp(MyExp):
     def __init__(self):
         super().__init__()
-        self.modules_config = "configs/modules/boxinst_darknet.yaml"
+        self.modules_config = "configs/modules/boxinst_darknet_simplify.yaml"
         self.losses_config = "configs/losses/boxinst_losses.yaml"
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
 
@@ -37,9 +37,10 @@ class Exp(MyExp):
             conf_thre=0.05,
             mask_thre=0.50,
         )
-        self.include_post = True
         self.eval_interval = 5
         self.clip_norm_val = 0.0
+        # Onnx export
+        self.include_post = True
         self.export_input_names = ["input"]
         self.export_output_names = ["masks", "bboxes"]
         # Debug
@@ -81,7 +82,7 @@ class Exp(MyExp):
             mosaic=not no_aug,
             img_size=self.input_size,
             preproc=TrainTransform(
-                max_labels=120,
+                max_labels=100, # 120 -> 100
                 flip_prob=self.flip_prob,
                 hsv_prob=self.hsv_prob),
             degrees=self.degrees,

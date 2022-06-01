@@ -10,9 +10,13 @@ from typing import Any, Iterator, List, Union, Tuple
 from scipy.optimize import linear_sum_assignment
 
 def mask_find_bboxes(mask):
-    retval, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, connectivity=8) # connectivity参数的默认值为8
-    stats = stats[stats[:,4].argsort()]
-    return stats[:-1]
+    contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contour = max(contours, key=lambda contour: cv2.contourArea(contour)).squeeze(1)
+    x1 = contour[:, 0].min()
+    y1 = contour[:, 1].min()
+    x2 = contour[:, 0].max()
+    y2 = contour[:, 1].max()
+    return np.asarray([x1, y1, x2, y2]) 
 
 def linear_sum_assignment_with_inf(cost_matrix, *args, **kwargs):
     cost_matrix = np.asarray(cost_matrix)

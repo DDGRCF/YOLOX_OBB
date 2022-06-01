@@ -69,12 +69,11 @@ def mask_vis(img, masks,
              scores, cls_ids, 
              bboxes=None, conf=-1, 
              class_names=None, 
-             enable_put_text=False, 
-             enable_put_bbox=False):
+             enable_put_text=True, 
+             enable_put_bbox=True):
     if enable_put_text:
         assert enable_put_bbox
     for i in range(len(masks)):
-        # rbox = rboxes[i].astype(np.int32)
         mask = masks[i].astype(np.uint8)
         cls_id = int(cls_ids[i])
         score = scores[i]
@@ -85,13 +84,11 @@ def mask_vis(img, masks,
         img[mask > 0] = img[mask > 0] * 0.5 + color.reshape(1, 3) * 0.5
         if enable_put_bbox and bboxes is None:
             bbox = mask_find_bboxes(mask)
-            x0 = bbox[0]
-            y0 = bbox[1]
-            x1 = bbox[0] + bbox[2]
-            y1 = bbox[1] + bbox[3]
+            x0, y0, x1, y1 = bbox.T
+            cv2.rectangle(img, (x0, y0), (x1, y1), color.tolist(), 2)
         elif enable_put_bbox:
             bbox = bboxes[i].astype(np.int32)
-            x0, y0, x1, y1 = bbox[0], bbox[1], bbox[2], bbox[3]
+            x0, y0, x1, y1 = bbox.T
             cv2.rectangle(img, (x0, y0), (x1, y1), color.tolist(), 2)
         if enable_put_text:
             text = '{}:{:.1f}%'.format(class_names[cls_id], score * 100)
@@ -103,7 +100,7 @@ def mask_vis(img, masks,
                 (x0, y0 + 1),
                 (x0 + txt_size[0] + 1, y0 + int(1.5*txt_size[1])),
                 txt_color,
-                -1
+                1
             )
             cv2.putText(img, text, (x0, y0 + txt_size[1]), font, 0.4, txt_color, thickness=1)
 

@@ -161,7 +161,7 @@ class Predictor(object):
         elif self.output_format == "bbox":
             return self.visual_bbox(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.3))
         elif self.output_format == "mask":
-            return self.visual_mask(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.3))
+            return self.visual_mask(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.3), with_bbox=True)
         elif isinstance(self.output_format, (tuple, list)):
             if "bbox" in self.output_format and "mask" in self.output_format and len(self.output_format) == 2:
                 return self.visual_mask(output, img_info, vis_conf=getattr(self.exp, "vis_conf", 0.3), with_bbox=True)

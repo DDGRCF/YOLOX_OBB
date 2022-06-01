@@ -16,15 +16,15 @@ class Exp(MyExp):
         super().__init__()
         self.modules_config = "configs/modules/sparseinst_darknet_simplify.yaml"
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
-        self.max_epoch = 12
+        self.max_epoch = 24
         self.no_aug_epochs = 2
         self.data_num_workers = 4
         self.no_eval = False
         # mosaic data augmentation | default set 0.0 for fast train
         self.mosaic_prob = 0.0
         # copy paste data augmentation | default set 0.0 for fast train
-        self.copy_paste_prob = 0.0
-        self.basic_lr_per_img = 2.5e-5 / 64.0
+        self.copy_paste_prob = 1.0
+        self.basic_lr_per_img = 5.0e-5 / 64.0
         self.weight_decay = 0.05
         self.postprocess_cfg = dict(
             conf_thre=0.005,
@@ -32,9 +32,9 @@ class Exp(MyExp):
         )
         # LR Scheduler
         self.scheduler = "multistep"
-        self.milestones_epoch_step = (9, 11)
+        self.milestones = (16, 20)
         self.clip_norm_val = 0.0
-        self.eval_interval = 3
+        self.eval_interval = 2
         # Debug
         self.enable_debug = False
         # Model export (onnx name)
@@ -92,11 +92,6 @@ class Exp(MyExp):
 
     def get_lr_scheduler(self, lr, iters_per_epoch):
         from yolox.utils import LRScheduler
-        if not hasattr(self, "milestones"):
-            assert hasattr(self, "milestones_epoch_step")
-            self.milestones = []
-            for step_epoch in self.milestones_epoch_step:
-                self.milestones.append(step_epoch * iters_per_epoch)
 
         scheduler = LRScheduler(
             self.scheduler,

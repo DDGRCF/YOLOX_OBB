@@ -126,8 +126,9 @@ class CondInstDetectX(DetectX):
                 cnt_out = output[:, self.reg_dim + 1 + self.num_classes :]
                 img_ind = torch.full_like(class_conf, i)
                 detections  = torch.cat((bboxes, obj_conf, class_conf, class_pred.float()), 1)
-                if len(bboxes) > self.bbox_keep_topk:
-                    topk_keep_inds = torch.topk((obj_conf * class_conf).squeeze(-1), k=self.bbox_keep_topk, sorted=True)[1]
+                # for conventient
+                if len(bboxes) > self.bbox_pre_topk:
+                    topk_keep_inds = torch.topk((obj_conf * class_conf).squeeze(-1), k=self.bbox_pre_topk, sorted=True)[1]
                 else:
                     topk_keep_inds = torch.arange(len(bboxes), device=device)
                 keep_inds = multiclass_nms(bboxes[topk_keep_inds], 

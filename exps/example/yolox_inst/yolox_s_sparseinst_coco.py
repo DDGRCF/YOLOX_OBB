@@ -55,7 +55,7 @@ class Exp(MyExp):
                 if hasattr(v, "bias") and isinstance(v.bias, nn.Parameter):
                     pg.append(v.bias)  # biases
                 if isinstance(v, nn.BatchNorm2d) or "bn" in k:
-                    v.eval()
+                    pg.append(v.weight);
                 elif hasattr(v, "weight") and isinstance(v.weight, nn.Parameter):
                     pg.append(v.weight)  # apply decay
 

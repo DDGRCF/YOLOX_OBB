@@ -29,11 +29,11 @@
 Firstly, create python environment
 
 ```shell
-conda create -n yolox_obb python=3.7 -y
+conda create -n yolox_dect python=3.7 -y
 ```
 then, install pytorch according to your machine, as cuda-10.2 and pytorch-1.7.0, you can install like following
 ```shell
-conda activate yolox_obb
+conda activate yolox_dect
 conda install pytorch==1.7.0 torchvision==0.8.0 torchaudio==0.7.0 cudatoolkit=10.2 -c pytorch -y
 ```
 then, clone the github of the item and install requirements

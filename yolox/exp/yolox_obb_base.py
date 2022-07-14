@@ -64,7 +64,7 @@ class OBBExp(Exp):
         self.output_dir = "YOLOX_outputs"
         self.postprocess_cfg = dict(
             conf_thre=0.05,
-            nms_thre=0.65,
+            nms_thre=0.1,
         )
         self.test_size = (1024, 1024)
         self.evaluate_cfg = dict(

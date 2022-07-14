@@ -13,9 +13,7 @@ class Exp(MyExp):
         self.no_aug_epochs = 2
         self.no_eval = True
         self.mosaic_prob = 1.0
-        self.mixup_prob = 1.0
         self.copy_paste_prob = 1.0
-        self.mosaic_prob = 1.0
         self.mixup_prob = 0.0
         self.enable_resample = True # for resampling samples
         # enable debug which allow usr to debug aug images

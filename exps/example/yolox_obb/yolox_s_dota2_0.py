@@ -13,11 +13,6 @@ class Exp(MyExp):
         self.dataset_config="configs/datasets/dota20.yaml"
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
         # -----train config-------#
-        self.warmup_epochs=1
-        self.basic_lr_per_img = 0.01 / 64
-        self.max_epoch = 80
-        self.no_aug_epochs = 10
-        # -----train config-------#
         self.no_eval = True
         self.copy_paste_prob = 1.0
         self.mosaic_prob = 1.0

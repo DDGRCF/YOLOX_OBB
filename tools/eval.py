@@ -50,9 +50,6 @@ def make_parser():
         help="pls input your expriment description file",
     )
     parser.add_argument("-c", "--ckpt", default=None, type=str, help="ckpt for eval")
-    parser.add_argument("--conf_thre", default=None, type=float, help="test conf")
-    parser.add_argument("--nms_thre", default=None, type=float, help="test nms threshold")
-    parser.add_argument("--test_size", default=None, type=int, help="test img size")
     parser.add_argument("--seed", default=None, type=int, help="eval seed")
     parser.add_argument(
         "--fp16",

@@ -12,19 +12,11 @@ class Exp(MyExp):
         super().__init__()
         self.dataset_config="configs/datasets/dota20.yaml"
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
-        # -----train config-------#
-        self.warmup_epochs=0
-        self.basic_lr_per_img = 0.01 / 64
         self.max_epoch = 80
-        self.no_aug_epochs = 10
-        # -----train config-------#
         self.no_eval = True
-        self.enable_mixup = True
-        self.enable_copy_paste = True # for copy paste augmention
-        self.enable_resample = True # for resampling samples
         self.copy_paste_prob = 1.0
         self.mosaic_prob = 1.0
-        self.mixup_prob = 1.0
+        self.mixup_prob = 0.0
         # enable debug which allow usr to debug aug images
         # ignore images which exists horizontal labels, 
         # the rotated aug will not implement the classes by adding this item

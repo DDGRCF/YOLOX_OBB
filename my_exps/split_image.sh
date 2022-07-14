@@ -4,5 +4,7 @@ conda activate yolox_obb
 cd ../BboxToolkit/tools
 class_names=$1
 config=$2
+
 python img_split.py --base_json $config --classes $class_names
+
 cd -

@@ -238,7 +238,7 @@ class DOTADataset(Dataset):
 
     def evaluate_detection(self, 
                            data_list, 
-                           iou_thr=0.1,
+                           merge_nms_thre=0.1,
                            is_submiss=False, 
                            is_merge=False, 
                            save_results_dir=None,
@@ -268,7 +268,7 @@ class DOTADataset(Dataset):
                 result_merge_images.append(result_merge_images_per_image)
                 xy_start_list.append(xy_start_list_per_image)
 
-            worker = partial(self.single_image_merge, iou_thr=iou_thr, is_merge_nms=is_merge_nms)
+            worker = partial(self.single_image_merge, merge_nms_thre=merge_nms_thre, is_merge_nms=is_merge_nms)
             data_bind = list(zip(result_merge_images, xy_start_list, ori_id_set))
             if nproc > 1:
                 logger.info("Begin MultiProcess Deal...")
@@ -282,6 +282,7 @@ class DOTADataset(Dataset):
 
             merge_end_time = time_synchronized()
             logger.info(f"Merge cost time {merge_end_time - merge_start_time:.2f} s")
+
         if is_submiss:
             from concurrent.futures import ThreadPoolExecutor
             NUM_THREADS = min(8, os.cpu_count()) 
@@ -308,13 +309,11 @@ class DOTADataset(Dataset):
         else:
             logger.info(f"Begin eval online, wait...")
             return self._do_eval(data_list, self.ori_infos if is_merge else self.data_infos, eval_func=eval_func)
-        # else:
-        #     raise NotImplementedError
 
     def single_image_merge(
         self,
         iters,
-        iou_thr=0.1,
+        merge_nms_thre=0.1,
         is_merge_nms=True,
     ):
         result_per_image, xy_start_per_image, ori_id  = iters
@@ -338,7 +337,11 @@ class DOTADataset(Dataset):
             scores = np.empty((0, ))
 
         if is_merge_nms and len(bboxes):
-            mask_nms = multiclass_obb_nms(bboxes, scores[..., None], labels[..., None], iou_thr=iou_thr, class_agnostic=False) 
+            mask_nms = multiclass_obb_nms(bboxes, 
+                                          scores[..., None], 
+                                          labels[..., None], 
+                                          iou_thr=merge_nms_thre, 
+                                          class_agnostic=False) 
             bboxes = bboxes[mask_nms] 
             labels = labels[mask_nms]
             scores = scores[mask_nms]

@@ -133,6 +133,13 @@ class DOTAEvaluator:
             outputs, info_imgs[0], info_imgs[1], ids
         ):
             if output is None:
+                pred_data = {
+                    "id": img_id,
+                    "bboxes": np.empty((0, 8), dtype=np.float32),
+                    "labels": np.empty((0, ), dytpe=np.float32),
+                    "scores": np.empty((0, ), dtype=np.float32),
+                }
+                data_list.append(pred_data)
                 continue
             output = output.cpu()
 
@@ -179,11 +186,20 @@ class DOTAEvaluator:
         )
 
         info = time_info + "\n"
+        eval_func = kwargs.pop("eval_func", eval_arb_map)
+        if isinstance(eval_func, str):
+            try:
+                eval_func = eval(eval_func)
+            except:
+                logger.warning(f"Can't find eval func: {eval_func}, \
+                               will set {eval_arb_map.__name__} as default eval func")
 
         mAPs, mAP50 = self.dataloader.dataset.evaluate_detection(data_list, 
-                                                                 0.7, is_submiss, 
-                                                                 is_merge, 
-                                                                 eval_func=eval_arb_map, **kwargs) 
+                                                                 merge_nms_thre=kwargs.pop("merge_nms_thre", 0.1),
+                                                                 is_submiss=is_submiss,
+                                                                 is_merge=is_merge,
+                                                                 eval_func=eval_func,
+                                                                 **kwargs) 
         if mAPs is not None and mAP50 is not None:
             eval_stat["bbox"] = [mAPs, mAP50]
 

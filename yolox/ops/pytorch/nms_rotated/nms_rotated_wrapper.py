@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 from . import nms_rotated_ext
-from yolox.utils.obb_utils import bbox2type
+from yolox.utils.obb_utils import (bbox2type, get_bbox_type)
 
 class RotatedNMSOp(torch.autograd.Function):
 
@@ -167,7 +167,14 @@ def multiclass_obb_nms(rbboxes,
         max_coordinate = hbboxes.max() - hbboxes.min()
         offsets = labels.to(rbboxes) * (max_coordinate + torch.tensor(1).to(rbboxes))
         rbboxes_for_nms = rbboxes.clone()
-        rbboxes_for_nms[:, :2] = rbboxes_for_nms[:, :2] + offsets
+        _bbox_type = get_bbox_type(rbboxes_for_nms)
+        if _bbox_type == "obb":
+            rbboxes_for_nms[:, :2] = rbboxes_for_nms[:, :2] + offsets
+        elif _bbox_type == "poly":
+            rbboxes_for_nms = rbboxes_for_nms + offsets
+        else:
+            raise NotImplementedError
+
     if obb_type == "obb":
         keep = obb_nms(rbboxes_for_nms, scores, iou_thr, score_thr, small_thr, max_num)
     elif obb_type == "poly":

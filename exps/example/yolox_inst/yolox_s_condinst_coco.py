@@ -43,7 +43,7 @@ class Exp(MyExp):
         self.export_output_names = ["masks", "bboxes"]
         # Debug
         self.enable_debug = False
-        self._get_data_info(self.dataset_config)
+        # self._get_data_info(self.dataset_config)
 
     def get_optimizer(self, batch_size):
         if "optimizer" not in self.__dict__:

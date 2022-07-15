@@ -34,7 +34,7 @@ class BaseExp(metaclass=ABCMeta):
         else:   
             raise NotImplementedError
         self.__dict__.update(cfg_dict)
-
+    
     @abstractmethod
     def get_data_prefetcher(self, train_loader):
         pass

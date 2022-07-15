@@ -20,4 +20,4 @@ echo -e "\033[33mbatch_size is ${batch_size}\033[0m"
 echo -e "\033[33mother args: ${py_args}\033[0m"
 
 CUDA_VISIBLE_DEVICES=${cuda_device} python tools/eval.py -expn ${expn} \
--b ${num_device} -d ${batch_size} -f ${exp} -c ${ckpt} ${py_args}
+-b ${batch_size} -d ${num_device} -f ${exp} -c ${ckpt} ${py_args}

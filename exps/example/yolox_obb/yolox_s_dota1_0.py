@@ -23,5 +23,12 @@ class Exp(MyExp):
         self.aug_ignore = ['roundabout', 'storage-tank'] 
         # ignore images which has no labels, which ensure each train contains labels
         self.empty_ignore = True
-        self.test_conf = 0.05
-        self._get_data_info(self.dataset_config)
+        self.evaluate_cfg = dict(
+            is_submiss=False,
+            is_merge=False,
+            nproc=10)
+        self.postprocess_cfg = dict(
+            conf_thre=0.05,
+            nms_thre=0.1,
+        )
+        # self._get_data_info(self.dataset_config)

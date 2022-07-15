@@ -48,6 +48,8 @@ def get_exp(exp_file, exp_name):
         exp_file is not None or exp_name is not None
     ), "plz provide exp file or exp name."
     if exp_file is not None:
-        return get_exp_by_file(exp_file)
+        exp = get_exp_by_file(exp_file)
     else:
-        return get_exp_by_name(exp_name)
+        exp = get_exp_by_name(exp_name)
+    exp._get_data_info(exp.dataset_config)
+    return exp

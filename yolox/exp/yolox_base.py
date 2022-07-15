@@ -65,7 +65,7 @@ class Exp(BaseExp):
             conf_thre=0.01,
             nms_thre=0.65
         )
-        self._get_data_info(self.dataset_config)
+        # self._get_data_info(self.dataset_config)
 
 
     def get_model(self):

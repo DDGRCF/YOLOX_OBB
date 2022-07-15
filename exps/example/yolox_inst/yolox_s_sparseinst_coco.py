@@ -41,7 +41,7 @@ class Exp(MyExp):
         self.export_input_names = ["input"]
         self.export_output_names = ["masks", "scores"]
         self.include_post = True
-        self._get_data_info(self.dataset_config)
+        # self._get_data_info(self.dataset_config)
 
     def get_optimizer(self, batch_size):
         if "optimizer" not in self.__dict__:

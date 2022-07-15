@@ -136,7 +136,7 @@ class DOTAEvaluator:
                 pred_data = {
                     "id": img_id,
                     "bboxes": np.empty((0, 8), dtype=np.float32),
-                    "labels": np.empty((0, ), dytpe=np.float32),
+                    "labels": np.empty((0, ), dtype=np.float32),
                     "scores": np.empty((0, ), dtype=np.float32),
                 }
                 data_list.append(pred_data)

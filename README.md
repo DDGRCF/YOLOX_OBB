@@ -65,28 +65,30 @@ This part please reference [BboxToolkit](./BboxToolkit/USAGE.md)
 ### **Demo**
 I prepare the shell the demo script so that you can quick run obb demo as :
 ```shell
-$ expn=... && image_path=... && exp=... && ckpt=... && cuda=...
-$ bash my_exps/demo.sh ${expn} ${image_path} ${exp} ${ckpt} ${cuda}
+$ expn=... && exp=... && ckpt=... && cuda=... && img_path=...
+$ bash my_exps/demo.sh ${expn} ${exp} ${ckpt} ${cuda} ${img_path} --output_format obb --save_result
 ```
  
 ### **Train**
 ```shell
-$ expn=... && exp=... && ckpt=... && cuda=...
-$ bash my_exps/train.sh ${expn} ${exp} ${ckpt} ${cuda}
+$ expn=... && exp=... && cuda=... && cuda=... && num_device=... && batch_size=...
+$ bash my_exps/train.sh ${expn} ${exp} ${cuda} ${num_device} ${batch_size} --fp16[optional] 
 ```
 ### **Test**
 #### **OBB**
 * eval online
 ```shell
 $ expn=... && exp=... && ckpt=... && cuda=...
-$ bash my_exps/eval.sh ${expn} ${exp} ${ckpt} ${cuda} 
+$ bash my_exps/eval_obb.sh ${expn} ${exp} ${ckpt} ${cuda} ${num_device} ${batch_size} --fuse[optional] --fp16[optional] --options is_merge=True
 ```
 * generate submission file for *obb*
 ```shell
-$ expn=... && exp=... && ckpt=... && cuda=...
-$ bash my_exps/eval_obb.sh ${expn} ${exp} ${ckpt} ${cuda} 
+$ expn=... && exp=... && ckpt=... && cuda=... && num_device=... && batch_size=... 
+$ bash my_exps/eval_obb.sh ${expn} ${exp} ${ckpt} ${cuda} ${num_device} ${batch_size} --fuse[optional] --fp16[optional] --options is_merge=True is_submiss=True --test
 ```
 ## **Results**
+[MODEL_ZOO](https://pan.baidu.com/s/1k1k1JCq56Z-g9NrRtHNWhQ) | code: `tdm6`
+
 |Model | image size | mAP | epochs |
 | ------        |:---:  |  :---: |  :---: |
 |[YOLOX_s_dota1_0](./exps/example/yolox_obb/yolox_s_dota1_0.py) |1024  | 70.82 | 80 |

@@ -299,17 +299,6 @@ class Trainer:
             if is_parallel(evalmodel):
                 evalmodel = evalmodel.module
 
-        # ap50_95, ap50, summary = self.exp.eval(
-        #     evalmodel, self.evaluator, self.is_distributed
-        # )
-        # self.model.train()
-        # if self.rank == 0:
-        #     self.tblogger.add_scalar("val/COCOAP50", ap50, self.epoch + 1)
-        #     self.tblogger.add_scalar("val/COCOAP50_95", ap50_95, self.epoch + 1)
-        #     logger.info("\n" + summary)
-        # synchronize()
-        # self.save_ckpt("last_epoch", ap50_95 > self.best_ap)
-        # self.best_ap = max(self.best_ap, ap50_95)
         eval_dict, summary = self.exp.eval(
             evalmodel, self.evaluator, self.is_distributed
         )
@@ -317,8 +306,8 @@ class Trainer:
         if self.rank == 0:
             for metric, eval_stat in eval_dict.items():
                 ap50, ap50_95 = eval_stat
-                self.tblogger.add_scalar(f"{metric}_val/COCOAP50", ap50, self.epoch + 1)
-                self.tblogger.add_scalar(f"{metric}_val/COCOAP50_95", ap50_95, self.epoch + 1)
+                self.tblogger.add_scalar(f"{metric}_val/AP50", ap50, self.epoch + 1)
+                self.tblogger.add_scalar(f"{metric}_val/AP50_95", ap50_95, self.epoch + 1)
             logger.info("\n" + summary)
         synchronize()
 

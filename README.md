@@ -91,7 +91,7 @@ $ bash my_exps/eval_obb.sh ${expn} ${exp} ${ckpt} ${cuda} ${num_device} ${batch_
 
 |Model | image size | mAP | epochs |
 | ------        |:---:  |  :---: |  :---: |
-|[YOLOX_s_dota1_0](./exps/example/yolox_obb/yolox_s_dota1_0.py) |1024  | 70.82 | 80 |
+|[YOLOX_s_dota1_0](./exps/example/yolox_obb/yolox_s_dota1_0.py) |1024  | 70.82(73.17) | 80(137) |
 |[YOLOX_s_dota2_0](./exps/example/yolox_obb/yolox_s_dota2_0.py) |1024  | 49.52 | 80 |
 |[YOLOX_s_condinst_coco](./exps/example/yolox_obb/yolox_s_dota2_0.py) |1024  | 26.43 | 36 |
 |[YOLOX_s_sparseinst_coco](./exps/example/yolox_obb/yolox_s_dota2_0.py) |1024  | 0.05(**error**) | 24 |

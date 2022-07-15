@@ -29,7 +29,7 @@ if [ -d ${work_dir} ]; then
     echo 
     if [ ${REPLY}x = yx ]; then  
 		rm -rf ${work_dir}
-		echo -e "\033[31mAlready del ${work_dir}\033[0m"
+		echo -e "\033[31malready del ${work_dir}\033[0m"
     else
 		cd $work_dir
 		for ((i=0;i<${#deal_array[@]};i++)) 
@@ -39,7 +39,7 @@ if [ -d ${work_dir} ]; then
 			echo
 			if [ ${REPLY}x = yx ]; then
 				rm -rf ${deal_array[$i]}
-				echo -e "\033]31mAlready del log ${deal_array[$i]}\033[0m"
+				echo -e "\033]31malready del log ${deal_array[$i]}\033[0m"
 			fi
 		done
 		cd -

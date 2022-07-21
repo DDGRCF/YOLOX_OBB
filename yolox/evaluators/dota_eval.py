@@ -2,6 +2,7 @@ import BboxToolkit as bt
 import numpy as np
 from terminaltables import AsciiTable
 from multiprocessing import Pool
+from loguru import logger
 
 def eval_arb_map(det_results,
                  annotations,
@@ -341,4 +342,6 @@ def print_map_summary(mean_ap,
         table_data.append(['mAP', '', '', '', f'{mean_ap[i]:.3f}'])
         table = AsciiTable(table_data)
         table.inner_footing_row_border = True
-        print('\n' + table.table)
+        logger.info('\n' + table.table)
+        
+        #print('\n' + table.table)   #print can't be saved at log file

@@ -406,8 +406,6 @@ class DOTADataset(Dataset):
             for iou in IouTh:
                 mAP = eval_func(det_results, gt_dst, self.CLASSES, scale_ranges, iou, use_07_metric=use_07_metric, nproc=4)[0]
                 mAPs.append(mAP)
-            print("--------------------------------------------------------------")
-            print("map_5095:", np.mean(mAPs))
-            print("map_50:", mAPs[0])
-            print("--------------------------------------------------------------")
+            line = '--------------------------------------------------------------'
+            logger.info('\n'+line+"map_5095:"+str(np.mean(mAPs))+'\n'+"map_50:"+str(mAPs[0])+'\n'+line)
             return np.mean(mAPs), mAPs[0]

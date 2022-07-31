@@ -8,7 +8,7 @@ exp=$2
 ckpt=$3
 cuda_device=${4:-0}
 path=$5
-py_args=${@:7}
+py_args=${@:6}
 
 echo -e "\033[33mexp is ${exp}\033[0m"
 echo -e "\033[33mexpn is ${expn}\033[0m"

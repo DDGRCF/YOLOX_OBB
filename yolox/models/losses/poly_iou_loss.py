@@ -107,7 +107,7 @@ def poly_enclose(pts1, pts2):
 
 def poly_iou_loss(pred, target, mode='linear ', eps=1e-6):
     if pred.size(0) == 0 or target.size(0) == 0:
-        return pred.sum() * 0.
+        return pred.sum() * 0., pred.sum() * 0.
     areas1, areas2 = get_bbox_areas(pred), get_bbox_areas(target)
     pred, target = bbox2type(pred, 'poly'), bbox2type(target, 'poly')
     pred_pts = pred.reshape(pred.size(0), -1, 2)
@@ -128,7 +128,7 @@ def poly_iou_loss(pred, target, mode='linear ', eps=1e-6):
 
 def poly_giou_loss(pred, target, eps=1e-6):
     if pred.size(0) == 0 or target.size(0) == 0:
-        return pred.sum() * 0.
+        return pred.sum() * 0., pred.sum() * 0.
     areas1, areas2 = get_bbox_areas(pred), get_bbox_areas(target)
     pred, target = bbox2type(pred, 'poly'), bbox2type(target, 'poly')
 

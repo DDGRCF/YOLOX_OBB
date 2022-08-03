@@ -116,7 +116,7 @@ class Exp(MyExp):
 
         # for 1 batchsize
         def postprocess(output, num_classes=80, 
-                        conf_thre=0.1, mask_thre=0.45, 
+                        conf_thre=0.01, mask_thre=0.45, 
                         scale_factor=4, eps=1e-6, **kwargs):
             bs_masks, bs_scores = output[0][0], output[1][0]
             bs_scores, bs_labels = bs_scores.max(dim=-1)

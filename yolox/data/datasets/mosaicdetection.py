@@ -51,8 +51,7 @@ def debug_obb_data(labels,
     if save_dir is None:
         save_dir = "YOLOX_outputs"
     save_name_dir = os.path.join(save_dir, dir_name)
-    if not os.path.exists(save_name_dir):
-        os.makedirs(save_name_dir)
+    os.makedirs(save_name_dir, exist_ok=True)
     for bbox, c in zip(bboxes, cls):
         ctr_x = int(np.mean(bbox[0::2]))
         ctr_y = int(np.mean(bbox[1::2]))

@@ -31,4 +31,3 @@ class Exp(MyExp):
             conf_thre=0.05,
             nms_thre=0.1,
         )
-        # self._get_data_info(self.dataset_config)

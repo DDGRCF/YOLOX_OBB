@@ -119,7 +119,7 @@ class Exp(MyExp):
         from yolox.utils import replace_module
         model = replace_module(model, nn.SiLU, SiLU)
 
-        def postprocess(output, num_classes=80, conf_thre=0.1, mask_thre=0.45, **kwargs):
+        def postprocess(output, num_classes=80, conf_thre=0.01, mask_thre=0.45, **kwargs):
             bs_masks, bs_bboxes = output[0][0], output[1][0]
             bs_scores = bs_bboxes[:, 4] * bs_bboxes[:, 5]
             bs_labels = bs_bboxes[:, -1]

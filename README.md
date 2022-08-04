@@ -71,7 +71,7 @@ $ bash my_exps/demo.sh ${expn} ${exp} ${ckpt} ${cuda} ${img_path} --output_forma
  
 ### **Train**
 ```shell
-$ expn=... && exp=... && cuda=... && cuda=... && num_device=... && batch_size=...
+$ expn=... && exp=... && cuda=... && num_device=... && batch_size=...
 $ bash my_exps/train.sh ${expn} ${exp} ${cuda} ${num_device} ${batch_size} --fp16[optional] 
 ```
 ### **Test**

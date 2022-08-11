@@ -14,12 +14,12 @@ def make_parser():
     parser.add_argument("out_type", choices=["torchscript", "onnx", "tensorrt"])
     # exp config
     parser.add_argument(
-        "--output-name", type=str, default="yolox_torchscript", help="output name of models"
+        "--output-name", type=str, default=None, help="output name of models"
     )
     parser.add_argument(
         "--inference-image", type=str, default="images", help="image which help inference"
     )
-    parser.add_argument("--batch-size", type=int, default=1, help="batch size")
+    parser.add_argument("-b", "--batch-size", type=int, default=1, help="batch size")
     parser.add_argument(
         "-f",
         "--exp_file",
@@ -48,6 +48,7 @@ def make_parser():
 def main():
     args = make_parser().parse_args()
     logger.info("args value: {}".format(args))
+    root_expn_dir = "./YOLOX_outputs"
 
     assert args.batch_size is 1, "batch size only support 1"
     assert args.exp_file is not None, "exp file must be provided"
@@ -64,6 +65,9 @@ def main():
 
     if not args.experiment_name:
         args.experiment_name = exp.exp_name
+
+    if not args.output_name:
+        args.output_name = exp.exp_name
     
     if args.ckpt is None:
         file_name = os.path.join(exp.output_dir, args.experiment_name)
@@ -77,7 +81,9 @@ def main():
             raise ValueError
     else:
         ckpt_file = args.ckpt
-    dst_dir = os.path.dirname(ckpt_file)
+
+    dst_dir = os.path.join(root_expn_dir, args.experiment_name)
+    os.makedirs(dst_dir, exist_ok=True)
 
     device = torch.device(args.device)
     model = exp.get_model()
@@ -146,7 +152,7 @@ def main():
         TRT_LOGGER = trt.Logger(trt.Logger.VERBOSE)
         EXPLICIT_BATCH = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
 
-        tensorrt_output_path = os.path.join(exp.output_dir, args.output_name + ".engine")
+        tensorrt_output_path = os.path.join(dst_dir, args.output_name + ".engine")
         with trt.Builder(TRT_LOGGER) as builder, \
             builder.create_network(EXPLICIT_BATCH) as network, \
             trt.OnnxParser(network, TRT_LOGGER) as parser, \

@@ -35,6 +35,9 @@ class BaseExp(metaclass=ABCMeta):
             raise NotImplementedError
         self.__dict__.update(cfg_dict)
     
+    def model_wrapper(self, model):
+        return model
+    
     @abstractmethod
     def get_data_prefetcher(self, train_loader):
         pass

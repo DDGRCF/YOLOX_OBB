@@ -318,9 +318,14 @@ int main(int argc, char ** argv) {
     auto postTime = std::chrono::system_clock::now();
     doVisprocess(image, objects, savePath);
     auto endTime = std::chrono::system_clock::now();
-    char finishInfo[128];
-    snprintf(finishInfo, sizeof(finishInfo), "Total time: %d ms", 
+    char finishInfo[256];
+    snprintf(finishInfo, sizeof(finishInfo), "Inference time: %d ms, Postprocess time: %d ms, Total time: %d ms", 
+        std::chrono::duration_cast<std::chrono::milliseconds>(inferTime - startTime).count(),
+        std::chrono::duration_cast<std::chrono::milliseconds>(postTime - inferTime).count(),
         std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count());
     gLogger.log(mINFO, finishInfo);
+    context->destroy();
+    engine->destroy();
+    runtime->destroy();
 }
 

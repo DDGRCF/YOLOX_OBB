@@ -43,7 +43,6 @@ class Exp(MyExp):
         from yolox.utils import replace_module
         from yolox.models import SiLU
         
-        
         class TRTModel(nn.Module):
             def __init__(self, model, num_classes, postprocess_cfg, include_post=False):
                 super().__init__()

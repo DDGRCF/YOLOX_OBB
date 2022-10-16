@@ -81,9 +81,11 @@ class DetectX(Detect):
 
         grids = torch.cat(grids, dim=1).type(dtype) # shape(1, sigma(w*h), 2)
         strides = torch.cat(strides, dim=1).type(dtype) # same as above
+        # strides = strides.repeat(1, 1, 2)
 
         outputs[..., :2] = (outputs[..., :2] + grids) * strides
         outputs[..., 2:4] = torch.exp(outputs[..., 2:4]) * strides
+
         return outputs
     
     def get_output_and_grid(self, output, k, stride, dtype):

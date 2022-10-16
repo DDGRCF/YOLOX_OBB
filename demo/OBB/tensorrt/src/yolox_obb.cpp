@@ -211,6 +211,8 @@ void doPostprocess(
             continue;
         }
         keep[numKeep++] = i;
+
+        #pragma omp parallel for
         for (auto _j = _i + 1; _j < num; _j++) {
             j = order[_j];
             s = scoresOut[j];
@@ -314,7 +316,7 @@ int main(int argc, char ** argv) {
     auto inferTime = std::chrono::system_clock::now();
     doPostprocess(objects, outputNodes, outputResults, 
         0.1, 0.1, originSize, {resizeSize, resizeSize});
-    gLogger.log(mINFO, "Do doPostprocess successs");
+    gLogger.log(mINFO, "Do doPostprocess success");
     auto postTime = std::chrono::system_clock::now();
     doVisprocess(image, objects, savePath);
     auto endTime = std::chrono::system_clock::now();
@@ -328,4 +330,3 @@ int main(int argc, char ** argv) {
     engine->destroy();
     runtime->destroy();
 }
-

@@ -21,6 +21,7 @@
   - [Demo](#Demo)
   - [Train](#Train)
   - [Test](#Test)
+  - [Deploy](#Deploy)
 
 - [Ralated&nbsp;Hub](#Ralated&nbsp;Hub)
 
@@ -86,6 +87,13 @@ $ bash my_exps/eval_obb.sh ${expn} ${exp} ${ckpt} ${cuda} ${num_device} ${batch_
 $ expn=... && exp=... && ckpt=... && cuda=... && num_device=... && batch_size=... 
 $ bash my_exps/eval_obb.sh ${expn} ${exp} ${ckpt} ${cuda} ${num_device} ${batch_size} --fuse[optional] --fp16[optional] --options is_merge=True is_submiss=True --test
 ```
+
+### **Deploy**
+* [yolox_s_obb](/exps/example/yolox_obb/yolox_s_dota1_0.py)*:*
+
+    [x] [TensorRT](/demo/OBB/tensorrt)
+
+    [x] [NCNN](/demo/OBB/ncnn)
 ## **Results**
 [MODEL_ZOO](https://pan.baidu.com/s/1k1k1JCq56Z-g9NrRtHNWhQ) | code: `tdm6`
 

@@ -4,7 +4,6 @@
 #include <cassert>
 #include <cmath>
 #include <algorithm>
-#include <opencv2/opencv.hpp>
 
 #define ax(i) i * 2
 #define ay(i) i * 2 + 1
@@ -224,11 +223,11 @@ template <typename T>
 }
 
 template <typename T>
-T polygon_area(T const * const box, const int & m) {
+T single_polygon_area(T const * const box, const int & m) {
     T area{0};
     for (int i = 0; i < m; i++) {
-        area += (i != m-1) ? (box[ax(i)] * box[ay(i + 1)] - box[ay(i)] * box[ax(i + 1)]) \
-            : (box[ax(i)] * box[ay(0)] - box[ay(i)] * box[ax(0)]);
+        area += std::abs((i != m-1) ? (box[ax(i)] * box[ay(i + 1)] - box[ay(i)] * box[ax(i + 1)]) \
+            : (box[ax(i)] * box[ay(0)] - box[ay(i)] * box[ax(0)]));
     }
     return area;
 }
@@ -250,26 +249,26 @@ template <typename T>
     return polygon_area<T>(orderedPts, num_convex);
 }
 
-
 template <typename T>
- void get_rotated_vertices(
+void get_rotated_vertices(
     T const * const box,
     Point<T> (&pts)[4],
-    const int & nms_type) {
+    const int & nms_type,
+    const T & shift_x, const T & shift_y) {
 
   if (nms_type == OBB) {
     double theta = box[4];
     T cosTheta2 = (T)cos(theta) * 0.5f;
     T sinTheta2 = (T)sin(theta) * 0.5f;
     // y: top --> down; x: left --> right
-    pts[0].x = box[0] + sinTheta2 * box[3] + cosTheta2 * box[2];
-    pts[0].y = box[1] + cosTheta2 * box[3] - sinTheta2 * box[2];
-    pts[1].x = box[0] - sinTheta2 * box[3] + cosTheta2 * box[2];
-    pts[1].y = box[1] - cosTheta2 * box[3] - sinTheta2 * box[2];
-    pts[2].x = 2 * box[0] - pts[0].x;
-    pts[2].y = 2 * box[1] - pts[0].y;
-    pts[3].x = 2 * box[0] - pts[1].x;
-    pts[3].y = 2 * box[1] - pts[1].y;
+    pts[0].x = (box[0] - shift_x) + sinTheta2 * box[3] + cosTheta2 * box[2];
+    pts[0].y = (box[1] - shift_y) + cosTheta2 * box[3] - sinTheta2 * box[2];
+    pts[1].x = (box[0] - shift_x) - sinTheta2 * box[3] + cosTheta2 * box[2];
+    pts[1].y = (box[1] - shift_y) - cosTheta2 * box[3] - sinTheta2 * box[2];
+    pts[2].x = 2 * (box[0] - shift_x) - pts[0].x;
+    pts[2].y = 2 * (box[1] - shift_y) - pts[0].y;
+    pts[3].x = 2 * (box[0] - shift_x) - pts[1].x;
+    pts[3].y = 2 * (box[1] - shift_y) - pts[1].y;
   } else if (nms_type == Poly) {
     pts[0].x = box[0];
     pts[0].y = box[1];
@@ -286,17 +285,22 @@ template <typename T>
 T single_box_iou_rotated(T const * const box1_raw, T const * const box2_raw, const int & nms_type=OBB) {
     Point<T> pts1[4];
     Point<T> pts2[4];
-    get_rotated_vertices<T>(box1_raw, pts1, nms_type);
-    get_rotated_vertices<T>(box2_raw, pts2, nms_type);
     T area1{0}; T area2{0};
+    T center_shift_x{0}; T center_shift_y{0};
     if (nms_type == OBB) {
+      center_shift_x = (box1_raw[0] + box2_raw[0]) / 2.0;
+      center_shift_y = (box1_raw[1] + box2_raw[1]) / 2.0;
       area1 = box1_raw[2] * box1_raw[3];
       area2 = box2_raw[2] * box2_raw[3];
     } else if (nms_type == Poly) {
-      area1 = polygon_area<T>(box1_raw, 4);
-      area2 = polygon_area<T>(box2_raw, 4);
+      area1 = single_polygon_area<T>(box1_raw, 4);
+      area2 = single_polygon_area<T>(box2_raw, 4);
     }
-    if (area1 < 1e-10 || area2 < 1e-10) {
+
+    get_rotated_vertices<T>(box1_raw, pts1, nms_type, center_shift_x, center_shift_y);
+    get_rotated_vertices<T>(box2_raw, pts2, nms_type, center_shift_x, center_shift_y);
+
+    if (area1 < 1e-6 || area2 < 1e-6) {
         return 0.f;
     }
 

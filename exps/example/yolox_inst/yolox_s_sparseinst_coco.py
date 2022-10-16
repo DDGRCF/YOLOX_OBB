@@ -102,52 +102,53 @@ class Exp(MyExp):
         )
         return scheduler
     
-    def model_wrapper(self, model):
+    def model_wrapper(self, model, backends="tensorrt"):
         import torch.nn.functional as F
         from yolox.utils import replace_module
         from yolox.models import SiLU, AdaptiveAvgPool2d__forward
 
-        def replace_func(rep_module, new_module, **kwargs):
-            rep_module.forward = AdaptiveAvgPool2d__forward
-            return rep_module
 
-        model = replace_module(model, nn.SiLU, SiLU)
-        model = replace_module(model, nn.AdaptiveAvgPool2d, None, replace_func=replace_func)
-
-        # for 1 batchsize
-        def postprocess(output, num_classes=80, 
-                        conf_thre=0.01, mask_thre=0.45, 
-                        scale_factor=4, eps=1e-6, **kwargs):
-            bs_masks, bs_scores = output[0][0], output[1][0]
-            bs_scores, bs_labels = bs_scores.max(dim=-1)
-            keep = bs_scores > conf_thre
-            bs_scores = bs_scores[keep]
-            bs_labels = bs_labels[keep]
-            bs_masks = bs_masks[keep]
-            bs_masks_ = (bs_masks > mask_thre).float()
-            bs_scores = bs_scores * ((bs_masks_ * bs_masks).sum((1, 2)) / (bs_masks_.sum((1, 2)) + eps))
-            bs_masks = F.interpolate(bs_masks[:, None], scale_factor=scale_factor, 
-                                mode="bilinear", align_corners=False).squeeze(1)
-            bs_masks = (bs_masks > mask_thre).type(bs_scores.dtype)
-            bs_scores = torch.cat((bs_scores, bs_labels.type(bs_scores.dtype)), dim=-1)
-            return bs_masks, bs_scores
-
-        # for OModel
-        class OModel(nn.Module):
+        class TRTModel(nn.Module):
             """
                 model
             """
             def __init__(self, model, num_classes, postprocess_cfg, include_post=False):
                 super().__init__()
+                def replace_func(rep_module, new_module, **kwargs):
+                    rep_module.forward = AdaptiveAvgPool2d__forward
+                    return rep_module
+                model = replace_module(model, nn.SiLU, SiLU)
+                model = replace_module(model, nn.AdaptiveAvgPool2d, None, replace_func=replace_func)
                 self.main_model = model
                 self.include_post = include_post
                 self.num_classes = num_classes
                 self.postprocess_cfg = postprocess_cfg
             
+            # static deal
+            def postprocess(output, num_classes=80, 
+                            conf_thre=0.01, mask_thre=0.45, 
+                            scale_factor=4, eps=1e-6, **kwargs):
+                bs_masks, bs_scores = output[0][0], output[1][0]
+                bs_scores, bs_labels = bs_scores.max(dim=-1)
+                keep = bs_scores > conf_thre
+                bs_scores = bs_scores[keep]
+                bs_labels = bs_labels[keep]
+                bs_masks = bs_masks[keep]
+                bs_masks_ = (bs_masks > mask_thre).float()
+                bs_scores = bs_scores * ((bs_masks_ * bs_masks).sum((1, 2)) / (bs_masks_.sum((1, 2)) + eps))
+                bs_masks = F.interpolate(bs_masks[:, None], scale_factor=scale_factor, 
+                                    mode="bilinear", align_corners=False).squeeze(1)
+                bs_masks = (bs_masks > mask_thre).type(bs_scores.dtype)
+                bs_scores = torch.cat((bs_scores, bs_labels.type(bs_scores.dtype)), dim=-1)
+                return bs_masks, bs_scores
+            
+            # only support static 
             def forward(self, input):
                 output = self.main_model(input)
                 if self.include_post:
-                    output = postprocess(output, self.num_classes, **self.postprocess_cfg)
+                    output = self.postprocess(output, self.num_classes, **self.postprocess_cfg)
                 return output
+        backends_map = {"tensorrt": TRTModel} 
+        assert backends in backends_map, f"Unsupport {backends} backends"
             
-        return OModel(model, self.num_classes, self.postprocess_cfg, self.include_post)
+        return backends_map[backends](model, self.num_classes, self.postprocess_cfg, self.include_post)

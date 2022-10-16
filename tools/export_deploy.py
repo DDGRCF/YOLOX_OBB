@@ -11,7 +11,7 @@ from yolox.utils import DictAction
 def make_parser():
     parser = argparse.ArgumentParser()
     # convert type for torchscript / onnx / tensorrt
-    parser.add_argument("out_type", choices=["torchscript", "onnx", "tensorrt"])
+    parser.add_argument("out_type", choices=["torchscript", "onnx", "tensorrt", "ncnn"])
     # exp config
     parser.add_argument(
         "--output-name", type=str, default=None, help="output name of models"
@@ -92,7 +92,7 @@ def main():
         ckpt = ckpt["model"]
     model.load_state_dict(ckpt, strict=True)
     logger.info("loading checkpoint done.")
-    deploy_model = exp.model_wrapper(model)
+    deploy_model = exp.model_wrapper(model, args.out_type)
     deploy_model.float()
     deploy_model.eval()
     deploy_model.to(device)
@@ -113,7 +113,7 @@ def main():
         torchscript_output_path = os.path.join(dst_dir, args.output_name + ".pt")
         deploy_model.save(torchscript_output_path)
         logger.info("generated torchsciopt model named {}".format(args.output_name))
-    if args.out_type == "onnx" or args.out_type == "tensorrt":
+    if args.out_type in ["onnx", "tensorrt", "ncnn"]:
         onnx_output_path = os.path.join(dst_dir, args.output_name + ".onnx")
         logger.info("onnx model input name is {}".format(model_input_names))
         logger.info("onnx model output name is {}".format(model_output_names))
@@ -135,13 +135,13 @@ def main():
                             verbose=True)
         logger.info("onnx model convert done.")
         if args.is_onnxsim:
-            logger.info("begin simplify onnx modek, and we will check 3 times...")
+            logger.info("Begin simplify onnx modek, and we will check 3 times...")
             from onnxsim import simplify
             input_shapes = {"input": list(dummy_input.shape)}
             onnx_model = onnx.load(onnx_output_path)
 
             model_simp, check = simplify(onnx_model, check_n = 3, input_shapes=input_shapes, perform_optimization=True)
-            assert check, "Simplified ONNX model could not be validate"
+            assert check, "simplify ONNX model could not be validate"
             onnx.save(model_simp, onnx_output_path)
             logger.info("simplify onnx model done.")
 
@@ -159,7 +159,7 @@ def main():
             trt.Runtime(TRT_LOGGER) as runtime:
             config = builder.create_builder_config()
             config.max_workspace_size = 1 << args.workspace_size
-            with open(onnx_output_path, 'rb') as onnx_model:
+            with open(onnx_output_path, "rb") as onnx_model:
                 logger.info("begin parsing onnx file")
                 if not parser.parse(onnx_model.read()):
                     for error in range(parser.num_errors):
@@ -170,6 +170,10 @@ def main():
             with open(tensorrt_output_path, "wb") as trt_model:
                 trt_model.write(engine.serialize())
             logger.info("begin save trt_model to {}".format(tensorrt_output_path))
+    
+    if args.out_type == "ncnn":
+        logger.info("already convert the model which is supported in ncnn backends")
+        logger.warning("unsupport convert the model in this pipeline. Please convert the model in ncnn")
     
 if __name__ == "__main__":
     main()

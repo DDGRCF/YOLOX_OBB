@@ -114,34 +114,37 @@ class Exp(MyExp):
         )
         return scheduler
 
-    def model_wrapper(self, model):
+    def model_wrapper(self, model, backends="tensorrt"):
         from yolox.models import SiLU
         from yolox.utils import replace_module
-        model = replace_module(model, nn.SiLU, SiLU)
 
-        def postprocess(output, num_classes=80, conf_thre=0.01, mask_thre=0.45, **kwargs):
-            bs_masks, bs_bboxes = output[0][0], output[1][0]
-            bs_scores = bs_bboxes[:, 4] * bs_bboxes[:, 5]
-            bs_labels = bs_bboxes[:, -1]
-            bs_bboxes = bs_bboxes[:, :4]
-            bs_masks = (bs_masks > mask_thre).type(bs_scores.dtype)
-            return bs_masks, torch.cat((bs_bboxes, bs_scores[:, None], bs_labels[:, None]), dim=1)
         
-        class OModel(nn.Module):
+        class TRTModel(nn.Module):
             def __init__(self, model, num_classes, postprocess_cfg, include_post=False):
                 super().__init__()
+                model = replace_module(model, nn.SiLU, SiLU)
                 self.main_model = model
                 self.include_post = include_post
                 self.num_classes = num_classes
                 self.postprocess_cfg = postprocess_cfg
+    
+            def postprocess(output, num_classes=80, conf_thre=0.01, mask_thre=0.45, **kwargs):
+                bs_masks, bs_bboxes = output[0][0], output[1][0]
+                bs_scores = bs_bboxes[:, 4] * bs_bboxes[:, 5]
+                bs_labels = bs_bboxes[:, -1]
+                bs_bboxes = bs_bboxes[:, :4]
+                bs_masks = (bs_masks > mask_thre).type(bs_scores.dtype)
+                return bs_masks, torch.cat((bs_bboxes, bs_scores[:, None], bs_labels[:, None]), dim=1)
             
             def forward(self, input):
                 output = self.main_model(input)
                 if self.include_post:
-                    output = postprocess(output, self.num_classes, **self.postprocess_cfg)
+                    output = self.postprocess(output, self.num_classes, **self.postprocess_cfg)
                 return output
 
-        return OModel(model, self.num_classes, self.postprocess_cfg, self.include_post)
+        backends_map = {"tensorrt": TRTModel} 
+        assert backends in backends_map, f"Unsupport {backends} backends"
+        return backends_map[backends](model, self.num_classes, self.postprocess_cfg, self.include_post)
 
 
 

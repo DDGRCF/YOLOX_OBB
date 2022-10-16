@@ -6,7 +6,6 @@ import os
 
 from yolox.exp import OBBExp as MyExp
 
-
 class Exp(MyExp):
     def __init__(self):
         super().__init__()
@@ -33,4 +32,46 @@ class Exp(MyExp):
             conf_thre=0.05,
             nms_thre=0.1,
         )
-        # self._get_data_info(self.dataset_config)
+
+        # deploy
+        self.export_input_names = ["input"]
+        self.export_output_names = ["boxes", "scores", "class"]
+        self.include_post = True
+
+    def model_wrapper(self, model, backends="tensorrt"):
+        import torch
+        import torch.nn as nn
+        from yolox.utils import replace_module
+        from yolox.models import SiLU
+        
+        backends_map = {"tensorrt": TRTModel, "onnx": TRTModel, "torchscript": TRTModel} 
+        assert backends in backends_map, f"Unsupport {backends} backends"
+        
+        class TRTModel(nn.Module):
+            def __init__(self, model, num_classes, postprocess_cfg, include_post=False):
+                super().__init__()
+            
+                model = replace_module(model, nn.SiLU, SiLU)
+                self.main_model = model
+                self.include_post = include_post
+                self.num_classes = num_classes
+                self.postprocess_cfg = postprocess_cfg
+
+            # postprocess for static 
+            def postprocess(prediction, num_classes=15, **kwargs):
+                boxes = prediction[0, :, :5]
+                obj_score = prediction[0, :, 5]
+                cls_out = prediction[0, :, 6: 6 + num_classes]
+                cls_score, cls_pred = torch.max(cls_out, 1)
+                final_score = obj_score * cls_score
+                cls_pred = cls_pred.float()
+                return boxes, final_score, cls_pred
+
+            # only support static
+            def forward(self, input):
+                output = self.main_model(input)
+                if self.include_post:
+                    output = self.postprocess(output, self.num_classes, **self.postprocess_cfg)
+                return output
+        
+        return backends_map[backends](model, self.num_classes, self.postprocess_cfg, self.include_post)

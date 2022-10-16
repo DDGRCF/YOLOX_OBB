@@ -31,3 +31,98 @@ class Exp(MyExp):
             conf_thre=0.05,
             nms_thre=0.1,
         )
+
+        # deploy
+        self.export_input_names = ["input"]
+        self.export_output_names = ["boxes", "scores", "class"]
+        self.include_post = True
+
+    def model_wrapper(self, model, backends="tensorrt"):
+        import torch
+        import torch.nn as nn
+        from yolox.utils import replace_module
+        from yolox.models import SiLU
+        
+        
+        class TRTModel(nn.Module):
+            def __init__(self, model, num_classes, postprocess_cfg, include_post=False):
+                super().__init__()
+            
+                model = replace_module(model, nn.SiLU, SiLU)
+                self.main_model = model
+                self.include_post = include_post
+                self.num_classes = num_classes
+                self.postprocess_cfg = postprocess_cfg
+
+            # postprocess for static 
+            def postprocess(self, prediction, num_classes=15, **kwargs):
+                boxes = prediction[0, :, :5]
+                obj_score = prediction[0, :, 5]
+                cls_out = prediction[0, :, 6: 6 + num_classes]
+                cls_score, cls_pred = torch.max(cls_out, 1)
+                final_score = obj_score * cls_score
+                cls_pred = cls_pred.float()
+                return boxes, final_score, cls_pred
+
+            # only support static
+            def forward(self, input):
+                output = self.main_model(input)
+                if self.include_post:
+                    output = self.postprocess(output, self.num_classes, **self.postprocess_cfg)
+                return output
+        
+
+        class NCNNModel(nn.Module):
+            def __init__(self, model, num_classes, postprocess_cfg, include_post=False):
+                super().__init__()
+
+                from yolox.models.modules.detects.obbdetectx import OBBDetectX
+                def decode_outputs(ctx, outputs, dtype):
+                    grids = []
+                    strides = []
+                    for (hsize, wsize), stride in zip(ctx.hw, ctx.strides):
+                        yv, xv = torch.meshgrid([torch.arange(hsize), torch.arange(wsize)])
+                        grid = torch.stack((xv, yv), 2).view(1, -1, 2) # shape(1, w * h, 2)
+                        grids.append(grid)
+                        shape = grid.shape[:2]
+                        strides.append(torch.full((*shape, 1), stride)) # shape(1, w * h, 1)
+
+                    grids = torch.cat(grids, dim=1).type(dtype) # shape(1, sigma(w*h), 2)
+                    strides = torch.cat(strides, dim=1).type(dtype) # same as above
+                    strides = strides.repeat(1, 1, 2) # remove influence of unsupported expand in ncnn
+
+                    outputs_xy = (outputs[..., :2] + grids) * strides
+                    outputs_wh = torch.exp(outputs[..., 2:4]) * strides
+                    outputs_other = outputs[..., 4:]
+
+                    return torch.cat((outputs_xy, outputs_wh, outputs_other), dim=2)
+
+                OBBDetectX.decode_outputs = decode_outputs
+                model = replace_module(model, nn.SiLU, SiLU)
+
+                self.main_model = model
+                self.include_post = include_post
+                self.num_classes = num_classes
+                self.postprocess_cfg = postprocess_cfg
+
+            # postprocess for static 
+            def postprocess(self, prediction, num_classes=15, **kwargs):
+                boxes = prediction[:, :, :5]
+                obj_score = prediction[:, :, 5]
+                cls_out = prediction[:, :, 6: 6 + num_classes]
+                # cls_score, cls_pred = torch.max(cls_out, 2)
+                # final_score = obj_score * cls_score
+                # cls_pred = cls_pred.float()
+                return boxes, obj_score, cls_out
+            
+            # only support static
+            def forward(self, input):
+                output = self.main_model(input)
+                if self.include_post:
+                    output = self.postprocess(output, num_classes=self.num_classes, **self.postprocess_cfg)
+                return output
+        
+        backends_map = {"tensorrt": TRTModel, "onnx": TRTModel, "torchscript": TRTModel, "ncnn": NCNNModel} 
+        assert backends in backends_map, f"Unsupport {backends} backends"
+
+        return backends_map[backends](model, self.num_classes, self.postprocess_cfg, self.include_post)

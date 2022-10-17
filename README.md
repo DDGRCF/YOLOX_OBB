@@ -6,7 +6,7 @@
 ***
 
 ## **ForeWord**
-  More rotated detection methods can reference [OBBDetection](https://github.com/jbwang1997/OBBDetection.git). And you can reference [知乎](https://zhuanlan.zhihu.com/p/430850089?) for more information
+  More rotated detection methods can reference [OBBDetection](https://github.com/jbwang1997/OBBDetection.git). And you can reference [知乎](https://zhuanlan.zhihu.com/p/430850089?) for more information🔥🔥🔥(知乎更加详细，大家请参考知乎)
 ## **Introduction**
 
 ### Method

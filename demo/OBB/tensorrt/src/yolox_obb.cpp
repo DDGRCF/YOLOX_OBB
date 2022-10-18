@@ -8,7 +8,7 @@
 #include <opencv2/opencv.hpp>
 #include <NvInferPlugin.h>
 #include <NvInfer.h>
-#include "obb_nms.cpp"
+#include "obb_nms.hpp"
 #include "logging.h"
 #include "yolox_obb.h"
 #include "math.h"

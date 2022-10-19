@@ -38,7 +38,7 @@ class Exp(MyExp):
 
         self.vssp_cfg = dict(
             sp_num_process=10,
-            sp_test_ckpt_path="YOLOX_outputs/dota1_new/latest_ckpt.pth",
+            sp_test_ckpt_path="/path/to/exists/ckpt.pth",
             sp_tpfp_func="tpfp_default",
             sp_iou_thre=0.1,
             sp_batch_size=8,

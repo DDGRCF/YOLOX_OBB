@@ -91,7 +91,7 @@ class DetectX(Detect):
     def get_output_and_grid(self, output, k, stride, dtype):
         grid = self.grids[k]
         expanded_stride = self.expanded_strides[k]
-        batch_size = output.shape[0]
+        # batch_size = output.shape[0]
         assert(output.shape[1] % self.n_anchors == 0)
         num_channels = output.shape[1] // self.n_anchors
         hsize, wsize = output.shape[-2:]
@@ -101,8 +101,8 @@ class DetectX(Detect):
             expanded_stride = torch.full_like(grid[..., 0], stride)
             self.grids[k] = grid
             self.expanded_strides[k] = expanded_stride
-        output = output.view(batch_size, self.n_anchors, num_channels, hsize, wsize)
-        output = output.permute(0, 1, 3, 4, 2).reshape(batch_size, self.n_anchors * hsize * wsize, -1)
+        output = output.view(-1, self.n_anchors, num_channels, hsize, wsize)
+        output = output.permute(0, 1, 3, 4, 2).reshape(-1, self.n_anchors * hsize * wsize, num_channels)
         # Extra Val  
         grid = grid.view(1, -1, 2)
         expanded_stride = expanded_stride.view(1, -1)

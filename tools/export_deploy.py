@@ -1,15 +1,21 @@
+from email import header
 import os
-import cv2
-import onnx
-import torch
 import argparse
-import numpy as np
-from loguru import logger
+
 from yolox.exp import get_exp
 from yolox.utils import DictAction
 
+import cv2
+import onnx
+import torch
+import numpy as np
+import copy
+from loguru import logger
+from prettytable import PrettyTable
+
+
 def make_parser():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser("YOLOX Deploy Model Export")
     # convert type for torchscript / onnx / tensorrt
     parser.add_argument("out_type", choices=["torchscript", "onnx", "tensorrt", "ncnn"])
     # exp config
@@ -38,7 +44,7 @@ def make_parser():
     parser.add_argument("--opset-version", type=int, default=11)
     parser.add_argument("--is-onnxsim", action="store_true", default=False)
     parser.add_argument("--workspace-size", type=int, default=32)
-    parser.add_argument("--test_model", action="store_true", default=False)
+    parser.add_argument("--test-model", action="store_true", default=False)
     parser.add_argument(
         "--options",
         nargs="+",
@@ -63,6 +69,9 @@ def main():
         model_input_names = getattr(exp, "export_input_names", "input")
         model_output_names = getattr(exp, "export_output_names", "output") 
         dynamic_axes = getattr(exp, "export_dynamic_axes", None)
+        if dynamic_axes is not None and args.out_type in ["ncnn"]:
+            logger.warning(f"it not support {args.out_type} to export model in dynamic axes")
+
         if not isinstance(model_input_names, (tuple, list)):
             model_input_names = [model_input_names]
         if not isinstance(model_output_names, (tuple, list)):
@@ -127,28 +136,44 @@ def main():
 
             logger.info("begin convert onnx model...")
             torch.onnx.export(deploy_model,
-                                dummy_input,
-                                onnx_output_path,
-                                example_outputs=dummy_output if dynamic_axes is None else None,
-                                export_params=True,
-                                opset_version=11,#  args.opset_version,
-                                do_constant_folding=True,
-                                training=torch.onnx.TrainingMode.EVAL,
-                                input_names=model_input_names,
-                                output_names=model_output_names,
-                                dynamic_axes=dynamic_axes,
-                                verbose=True)
+                              dummy_input,
+                              onnx_output_path,
+                              example_outputs=dummy_output if dynamic_axes is None else None,
+                              export_params=True,
+                              opset_version=11,#  args.opset_version,
+                              do_constant_folding=True,
+                              training=torch.onnx.TrainingMode.EVAL,
+                              input_names=model_input_names,
+                              output_names=model_output_names,
+                              dynamic_axes=dynamic_axes,
+                              verbose=False)
             logger.info("onnx model convert done.")
             if args.is_onnxsim:
-                logger.info("Begin simplify onnx modek, and we will check 3 times...")
+                logger.info("begin simplify onnx model, and we will check 5 times...")
                 from onnxsim import simplify
                 input_shapes = {"input": list(dummy_input.shape)}
                 onnx_model = onnx.load(onnx_output_path)
 
-                model_simp, check = simplify(onnx_model, check_n = 3, input_shapes=input_shapes, perform_optimization=True)
+                model_simp, check = simplify(onnx_model, check_n = 5, 
+                    input_shapes=input_shapes, perform_optimization=True, dynamic_input_shape=False if dynamic_axes is None else True)
                 assert check, "simplify ONNX model could not be validate"
                 onnx.save(model_simp, onnx_output_path)
                 logger.info("simplify onnx model done.")
+        if args.test_model:
+            import onnxruntime
+            ort_session = onnxruntime.InferenceSession(onnx_output_path)
+            ort_inputs = {ort_session.get_inputs()[0].name: dummy_input.numpy().astype(np.float32)}
+            ort_outputs = ort_session.run(None, ort_inputs)
+
+            onnx_diff_table = PrettyTable(["Name", "Ori", "Ort", "Diff"])
+
+            for name, ori_output, ort_output in zip(model_output_names, dummy_output, ort_outputs):
+                ori_output = ori_output.detach().numpy().astype(np.float32)
+                onnx_diff_table.add_row([name, f"{ori_output.sum():.2f} | {ori_output.shape}",
+                                        f"{ort_output.sum():.2f} | {ori_output.shape}", 
+                                        f"{(abs(ori_output.sum() - ort_output.sum())):.2f}"])
+            onnx_diff_table.title = "Ori-Ort-Diff"
+            logger.info(f"\n{onnx_diff_table}")
     else:
         onnx_model = onnx.load(args.onnx_model)
 
@@ -166,6 +191,17 @@ def main():
             trt.Runtime(TRT_LOGGER) as runtime:
             config = builder.create_builder_config()
             config.max_workspace_size = 1 << args.workspace_size
+
+            if dynamic_axes is not None:
+                profile = builder.create_optimization_profile()
+                dynamic_axes_infos = getattr(exp, "export_trt_dynamic_axes", None)
+                assert dynamic_axes, "please set export trt dynamic axes in exp"
+                for name in model_input_names + model_output_names:
+                    dynamic_axes_info = dynamic_axes_infos.get(name, None)
+                    assert dynamic_axes_info, f"can't find {name} info in export trt dynamic axes"
+                    profile.set_shape(name, dynamic_axes_info["min"], dynamic_axes_info["media"], dynamic_axes_info["max"])
+                config.add_optimization_profile(profile)
+
             with open(onnx_output_path, "rb") as onnx_model:
                 logger.info("begin parsing onnx file")
                 if not parser.parse(onnx_model.read()):
@@ -177,6 +213,8 @@ def main():
             with open(tensorrt_output_path, "wb") as trt_model:
                 trt_model.write(engine.serialize())
             logger.info("begin save trt_model to {}".format(tensorrt_output_path))
+            if args.test_model:
+                pass
     
     if args.out_type == "ncnn":
         logger.info("already convert the model which is supported in ncnn backends")

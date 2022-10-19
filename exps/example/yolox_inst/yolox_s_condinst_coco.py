@@ -117,12 +117,17 @@ class Exp(MyExp):
     def model_wrapper(self, model, backends="tensorrt"):
         from yolox.models import SiLU
         from yolox.utils import replace_module
+        from yolox.models import Upsample__forward
 
         
         class TRTModel(nn.Module):
             def __init__(self, model, num_classes, postprocess_cfg, include_post=False):
                 super().__init__()
+                def replace_func(rep_module, new_module, **kwargs):
+                    rep_module.forward = Upsample__forward
                 model = replace_module(model, nn.SiLU, SiLU)
+                model = replace_module(model, nn.Upsample, None, replace_func)
+
                 self.main_model = model
                 self.include_post = include_post
                 self.num_classes = num_classes

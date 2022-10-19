@@ -36,34 +36,69 @@ class Exp(MyExp):
         self.export_input_names = ["input"]
         self.export_output_names = ["boxes", "scores", "class"]
         self.include_post = True
+    
+        # if use dynamic axes, please use under codes
+
+        # num_proposal = 0
+        # for stride in [8, 16, 32]:
+        #     num_proposal += int(self.test_size[0] / stride) * int(self.test_size[1] / stride)
+
+        # self.export_trt_dynamic_axes = {
+        #     "input": {
+        #         "min": [1, 3, *self.test_size],
+        #         "media": [1, 3, *self.test_size],
+        #         "max": [8, 3, *self.test_size],
+        #     },
+        #     "boxes": {
+        #         "min": [1, num_proposal, 5],
+        #         "media": [1, num_proposal, 5],
+        #         "max": [8, num_proposal, 5]
+        #     },
+        #     "scores": {
+        #         "min": [1, num_proposal], 
+        #         "media": [1, num_proposal],
+        #         "max": [8, num_proposal]
+        #     },
+        #     "class": {
+        #         "min": [1, num_proposal], 
+        #         "media": [1, num_proposal],
+        #         "max": [8, num_proposal]
+        #     }
+        # }
+
+        # self.export_dynamic_axes = {"input": {0: "batch"}, 
+        #                             "boxes": {0: "batch"}, 
+        #                             "scores": {0: "batch"}, 
+        #                             "class": {0: "batch"}}
 
     def model_wrapper(self, model, backends="tensorrt"):
         import torch
         import torch.nn as nn
         from yolox.utils import replace_module
-        from yolox.models import SiLU
+        from yolox.models import SiLU, Upsample__forward
         
         class TRTModel(nn.Module):
             def __init__(self, model, num_classes, postprocess_cfg, include_post=False):
                 super().__init__()
-            
+                # def replace_func(rep_module, new_module, **kwargs):
+                    # rep_module.forward = Upsample__forward
+                # nn.Upsample.forward = Upsample__forward
                 model = replace_module(model, nn.SiLU, SiLU)
+                # model = replace_module(model, nn.Upsample, None, replace_func)
                 self.main_model = model
                 self.include_post = include_post
                 self.num_classes = num_classes
                 self.postprocess_cfg = postprocess_cfg
 
-            # postprocess for static 
             def postprocess(self, prediction, num_classes=15, **kwargs):
-                boxes = prediction[0, :, :5]
-                obj_score = prediction[0, :, 5]
-                cls_out = prediction[0, :, 6: 6 + num_classes]
-                cls_score, cls_pred = torch.max(cls_out, 1)
+                boxes = prediction[:, :, :5]
+                obj_score = prediction[:, :, 5]
+                cls_out = prediction[:, :, 6: 6 + num_classes]
+                cls_score, cls_pred = torch.max(cls_out, 2)
                 final_score = obj_score * cls_score
                 cls_pred = cls_pred.float()
                 return boxes, final_score, cls_pred
 
-            # only support static
             def forward(self, input):
                 output = self.main_model(input)
                 if self.include_post:

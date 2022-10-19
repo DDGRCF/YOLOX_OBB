@@ -114,11 +114,12 @@ class Exp(MyExp):
             """
             def __init__(self, model, num_classes, postprocess_cfg, include_post=False):
                 super().__init__()
-                def replace_func(rep_module, new_module, **kwargs):
-                    rep_module.forward = AdaptiveAvgPool2d__forward
-                    return rep_module
+                # def replace_func(rep_module, new_module, **kwargs):
+                #     rep_module.forward = AdaptiveAvgPool2d__forward
+                #     return rep_module
                 model = replace_module(model, nn.SiLU, SiLU)
-                model = replace_module(model, nn.AdaptiveAvgPool2d, None, replace_func=replace_func)
+                # model = replace_module(model, nn.AdaptiveAvgPool2d, None, replace_func=replace_func)
+                nn.AdaptiveAvgPool2d = AdaptiveAvgPool2d__forward
                 self.main_model = model
                 self.include_post = include_post
                 self.num_classes = num_classes

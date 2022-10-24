@@ -156,12 +156,12 @@ int YOLOXOBBDect::inference(const cv::Mat & image, std::vector<Object> & objects
         auto class_score = class_row[class_index];
         score *= (float)(score * class_score);
         if (score < runner_params.conf_thre) continue;
-        auto ctr_x = boxes_row[0]; auto ctr_y = boxes_row[1];
+        auto ctr_x = boxes_row[0] / scale; auto ctr_y = boxes_row[1] / scale;
         if (ctr_x < 0. || ctr_y < 0. || 
             ctr_x > runner_params.target_size || 
             ctr_y > runner_params.target_size) continue;
         
-        auto obj_w = boxes_row[2]; auto obj_h = boxes_row[3]; auto obj_t = boxes_row[4];
+        auto obj_w = boxes_row[2] / scale; auto obj_h = boxes_row[3] / scale; auto obj_t = boxes_row[4];
         obj_t = -obj_t * 180 / M_PI;
 
         proposals.emplace_back(

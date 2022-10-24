@@ -129,7 +129,7 @@ int YOLOXOBBDect::inference(const cv::Mat & image, std::vector<Object> & objects
     ncnn::Mat in = ncnn::Mat::from_pixels_resize(image.data, ncnn::Mat::PIXEL_BGR, image_w, image_h, w, h);
 
     int w_pad = (w + 31) / 32 * 32 - w; 
-    int h_pad = (w + 31) / 32 * 32 - h;
+    int h_pad = (h + 31) / 32 * 32 - h;
     ncnn::Mat in_pad;
     ncnn::copy_make_border(in, in_pad, 0, h_pad, 0, w_pad, ncnn::BORDER_CONSTANT, 114.f);
 

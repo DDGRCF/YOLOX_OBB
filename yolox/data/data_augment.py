@@ -221,7 +221,7 @@ def _mirror(image, boxes, prob=0.5):
             boxes[:, 0] = width - boxes[:, 0]
             boxes[:, 4] *= -1
         elif boxes.shape[-1] == 8: # rotated box
-            boxes[:, 0::2] = width - boxes[:, 6::-2]
+            boxes[:, 0::2] = width - boxes[:, 0::-2]
 
     return image, boxes
 

@@ -14,8 +14,8 @@ from yolox.exp import MaskExp as MyExp
 class Exp(MyExp):
     def __init__(self):
         super().__init__()
-        self.modules_config = "configs/modules/boxinst_darknet_simplify.yaml"
-        self.losses_config = "configs/losses/boxinst_losses.yaml"
+        self.modules_config = "configs/modules/boxinst_darknet_simplify_s.yaml"
+        self.losses_config = "configs/losses/boxinst_losses_s.yaml"
         self.exp_name = os.path.split(os.path.realpath(__file__))[1].split(".")[0]
 
         self.max_epoch = 36
@@ -30,9 +30,9 @@ class Exp(MyExp):
         self.data_num_workers = 4
         self.no_eval = False
         # mosaic data augmentation | default set 0.0 for fast train
-        self.mosaic_prob = 0.0
+        self.mosaic_prob = 0.5
         # copy paste data augmentation | default set 0.0 for fast train
-        self.copy_paste_prob = 0.0
+        self.copy_paste_prob = 0.5
         self.postprocess_cfg = dict(
             conf_thre=0.05,
             mask_thre=0.50,

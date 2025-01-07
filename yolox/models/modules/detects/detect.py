@@ -42,7 +42,7 @@ class Detect(nn.Module):
 
     @staticmethod
     def postprocess(*args, **kwargs):
-        return postprocess_(*args, *kwargs)
+        return postprocess_(*args, **kwargs)
     
     @staticmethod
     def _make_grid(wsize, hsize, out_shape=(), dtype=torch.float32):
